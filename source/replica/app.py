@@ -3,6 +3,8 @@ import requests
 import threading
 import logging
 import os
+import json
+import sys
 from queue import Queue
 import time
 
@@ -39,6 +41,16 @@ def connect_to_upstream():
                 if line:
                     line_str = line.decode('utf-8') if isinstance(line, bytes) else line
                     logger.info(f"Ricevuto dal simulatore: {line_str}")
+                    
+                    # Controlla se è uno shutdown command
+                    try:
+                        if 'shutdown' in line_str.lower():
+                            logger.warning("⚠️ Shutdown rilevato (stringa)! Chiusura della replica...")
+                            os._exit(0)
+                    except json.JSONDecodeError:
+                        # Se non è JSON, controlla se contiene la parola shutdown
+                        pass
+                    
                     # Formato SSE corretto
                     sse_queue.put(f"data: {line_str}\n\n")
                 else:

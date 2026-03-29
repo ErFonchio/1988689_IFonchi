@@ -1,9 +1,32 @@
 import psycopg2
 from nicegui import ui
 
-ui.label('Fonchi Dashboard').classes('text-3xl font-bold mt-6 mb-4')
+ui.add_head_html('''
+    <style>
+        html, body {
+            background-color: #0f172a;
+        }
+    </style>
+''')
+
+ui.label('Fonchi Dashboard').classes('text-3xl font-bold mt-6 mb-4 text-white')
 
 all_rows = []
+event_tables = []
+event_labels = []
+event_table_keys = ['heartquack', 'conventional_explosion', 'nuclear_like']
+event_table_titles = ['heartquack', 'conventional_explosion', 'nuclear_like']
+event_type_aliases = {
+    'heartquack': 'heartquack',
+    'heartquake': 'heartquack',
+    'earthquake': 'heartquack',
+    'conventional_explosion': 'conventional_explosion',
+    'conventional explosion': 'conventional_explosion',
+    'conventional-explosion': 'conventional_explosion',
+    'nuclear_like': 'nuclear_like',
+    'nuclear like': 'nuclear_like',
+    'nuclear-like': 'nuclear_like',
+}
 
 
 def get_connection():
@@ -43,22 +66,32 @@ def apply_filters():
         if not sensor_query or sensor_query in str(row['sensor']).lower()
     ]
 
-    table.rows = filtered
+    grouped = {}
+    for row in filtered:
+        grouped.setdefault(row['type'], []).append(row)
+
+    for index in range(3):
+        event_key = event_table_keys[index]
+        event_labels[index].set_text(event_table_titles[index])
+        event_tables[index].rows = grouped.get(event_key, [])
+
+    selected_label.set_text(f'Selected sensor: {sensor_filter.value}')
 
 
 def load_data():
     global all_rows
     data = fetch_events()
-    all_rows = [
-        {
+    all_rows = []
+    for r in data:
+        raw_type = str(r[1]).strip().lower()
+        normalized_type = event_type_aliases.get(raw_type, raw_type.replace(' ', '_'))
+        all_rows.append({
             'sensor': r[0],
-            'type': r[1],
+            'type': normalized_type,
             'timestamp': str(r[2]),
             'frequency': r[3],
             'amplitude': r[4],
-        }
-        for r in data
-    ]
+        })
     apply_filters()
 
 
@@ -68,22 +101,24 @@ with ui.card().classes('w-full max-w-6xl mx-auto p-4 shadow-lg'):
     sensor_options = ['All sensors'] + [f'sensor-{i:02d}' for i in range(1, 13)]
     with ui.row().classes('items-center gap-3 flex-wrap mb-4'):
         ui.markdown('**Sensor filtering**').classes('text-sm font-semibold whitespace-nowrap')
-        sensor_filter = ui.select(sensor_options, label='Filter sensor', value='All sensors').classes('flex1')
-
+        sensor_filter = ui.select(sensor_options, label='Filter sensor', value='All sensors').classes('w-full sm:w-1/3')
+        selected_label = ui.label('Selected: All sensors').classes('text-sm text-grey-500')
 
     sensor_filter.on('update:modelValue', lambda e: apply_filters())
 
-    table = ui.table(
-        columns=[
-            {'name': 'sensor', 'label': 'Sensor', 'field': 'sensor', 'sortable': True},
-            {'name': 'type', 'label': 'Type', 'field': 'type', 'sortable': True},
-            {'name': 'timestamp', 'label': 'Timestamp', 'field': 'timestamp', 'sortable': True},
-            {'name': 'frequency', 'label': 'Frequency', 'field': 'frequency', 'sortable': True},
-            {'name': 'amplitude', 'label': 'Amplitude', 'field': 'amplitude', 'sortable': True},
-        ],
-        rows=[],
-        row_key='timestamp',
-    ).classes('w-full')
+    with ui.row().classes('gap-4 flex-wrap'):
+        for index in range(3):
+            with ui.card().classes('flex-1 min-w-[320px] p-4'):
+                event_labels.append(ui.label(event_table_titles[index]).classes('mb-3 text-base font-semibold'))
+                event_tables.append(ui.table(
+                    columns=[
+                        {'name': 'sensor', 'label': 'Sensor', 'field': 'sensor', 'sortable': True},
+                        {'name': 'timestamp', 'label': 'Timestamp', 'field': 'timestamp', 'sortable': True},
+                        {'name': 'frequency', 'label': 'Frequency', 'field': 'frequency', 'sortable': True},
+                        {'name': 'amplitude', 'label': 'Amplitude', 'field': 'amplitude', 'sortable': True},
+                    ],
+                    rows=[],
+                ).classes('w-full'))
 
     with ui.row().classes('items-center justify-between gap-2 mt-4'):
         ui.button('Refresh data', on_click=load_data).props('color=primary glossy')

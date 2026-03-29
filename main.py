@@ -16,17 +16,6 @@ event_tables = []
 event_labels = []
 event_table_keys = ['earthquake', 'conventional_explosion', 'nuclear_like']
 event_table_titles = ['earthquake', 'conventional explosion', 'nuclear like']
-#event_type_aliases = {
-#    'heartquack': 'heartquack',
-#    'heartquake': 'heartquack',
-#    'earthquake': 'heartquack',
-#    'conventional_explosion': 'conventional_explosion',
-#    'conventional explosion': 'conventional_explosion',
-#    'conventional-explosion': 'conventional_explosion',
-#    'nuclear_like': 'nuclear_like',
-#    'nuclear like': 'nuclear_like',
-#    'nuclear-like': 'nuclear_like',
-#}
 
 
 def get_connection():
@@ -81,8 +70,6 @@ def load_data():
     data = fetch_events()
     all_rows = []
     for r in data:
-        #raw_type = str(r[1]).strip().lower()
-        #normalized_type = event_type_aliases.get(raw_type, raw_type.replace(' ', '_'))
         all_rows.append({
             'sensor': r[0],
             'type': r[1],
@@ -122,6 +109,5 @@ with ui.card().classes('w-full max-w-6xl mx-auto p-4 shadow-lg'):
 
 
 load_data()
-#ui.timer(10.0, load_data)
 
 ui.run()

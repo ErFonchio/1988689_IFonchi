@@ -13,16 +13,31 @@ logger = logging.getLogger(__name__)
 ### First retireve devices
 SIMULATOR_HOST = os.getenv('SIMULATOR_HOST', 'localhost')
 url = f"http://{SIMULATOR_HOST}:8080/api/devices"
-response = requests.get(url)
 
-if response.status_code == 200:
-    devices = response.json()
+# Retry fino a 30 secondi per attendere il simulatore
+devices = []
+max_retries = 6  # 6 tentativi x 5 secondi = 30 secondi
+for attempt in range(max_retries):
+    try:
+        response = requests.get(url, timeout=5)
+        if response.status_code == 200:
+            devices = response.json()
+            logger.info(f"Dispositivi recuperati al tentativo {attempt + 1}")
+            break
+    except Exception as e:
+        logger.warning(f"Tentativo {attempt + 1}/{max_retries} fallito: {e}")
+        if attempt < max_retries - 1:
+            time.sleep(5)
 
 # retrieve web_sockets urls
 ws_urls = {}
 
-for device in devices:
-    ws_urls[device['id']] = device['websocket_url']
+if devices:
+    for device in devices:
+        ws_urls[device['id']] = device['websocket_url']
+    logger.info(f"WebSocket URLs recuperati per {len(ws_urls)} dispositivi")
+else:
+    logger.warning("Nessun dispositivo trovato dal simulatore!")
 
 
 ### CLASSES FOR HANDLING CONNECTION WITH SLAVES
@@ -31,8 +46,8 @@ ACK = b"ACK"
 ACK_TIMEOUT = 5.0 
 HEARTBEAT_INTERVAL = 10.0
 
-PORT = 5000 
-HOST = "127.0.0.1"
+PORT = 5001  # Socket server per Master-Slave (diverso da REST API)
+HOST = "0.0.0.0"  # Ascolta da qualsiasi interfaccia (Docker-ready)
 
 class SlaveConnection:
     def __init__(self, conn: socket.socket, slave_id: int, addr):
@@ -85,23 +100,44 @@ class Master:
 
     def accept_connection(self):
         '''
-            Listen for incoming connections from slaves
+            Listen for incoming connections from slaves with retry logic
         '''
-        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as server:
-            server.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-            server.bind((self.host, self.port))
-            server.listen(self.num_slaves)
-            logger.info(f"Master listening on {self.host}: {self.port}")
+        max_retries = 5
+        retry_count = 0
+        
+        while retry_count < max_retries:
+            try:
+                with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as server:
+                    server.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+                    server.bind((self.host, self.port))
+                    server.listen(self.num_slaves)
+                    logger.info(f"✓ Master listening on {self.host}:{self.port}")
+                    
+                    while True:
+                        try:
+                            conn, addr = server.accept()
+                            slave = SlaveConnection(conn, self.slave_id, addr)
+                            self.slave_id += 1
 
-            while True:
-                conn, addr = server.accept()
-                slave = SlaveConnection(conn, self.slave_id, addr)
-                self.slave_id += 1
-
-                with self.slaves_lock:
-                    self.slaves.append(slave)
-                
-                logger.info(f"Slave {slave.slave_id} connected. Total: {len(self.slaves)} slaves")
+                            with self.slaves_lock:
+                                self.slaves.append(slave)
+                            
+                            logger.info(f"✓ Slave {slave.slave_id} connected from {addr}. Total: {len(self.slaves)} slaves")
+                        except Exception as e:
+                            logger.error(f"Errore accettando connessione: {e}")
+                            continue
+                            
+            except socket.error as e:
+                retry_count += 1
+                logger.warning(f"Socket error al tentativo {retry_count}/{max_retries}: {e}")
+                if retry_count < max_retries:
+                    time.sleep(2)
+                else:
+                    logger.error(f"Impossibile bindare su {self.host}:{self.port} dopo {max_retries} tentativi")
+                    break
+            except Exception as e:
+                logger.error(f"Errore critico in accept_connection: {e}")
+                break
         
     
     def broadcast(self, data: bytes):
@@ -136,50 +172,95 @@ class Master:
         logger.info(f"Broadcast: {success}/{len(results)} slaves ACKed")
         return results
     
-    def run(self, data_source):
-        threading.Thread(target=self.accept_connection, daemon=True).start()
-        self.broadcast(data_source)
+    # def run(self, data_source):
+    #     threading.Thread(target=self.accept_connection, daemon=True).start()
+    #     self.broadcast(data_source)
 
-        
+### Get measurement data from sensors
 
-
-### Get measurment data from sensors
-
-# We try to read data concurrently, starting 12 different threads, one for each sensor.
+# We try to read data concurrently, starting threads for each sensor,
+# and broadcast the data to all connected replicas
 
 async def get_measures(sensor_id, master: Master):
-    ws_url = f'ws://localhost:8080/api/device/{sensor_id}/ws'
-    async with websockets.connect(ws_url) as websocket:
-        
-        print("obtaining measures")
-        while True:
-            #print("Receiving data...")
-            measurement = await websocket.recv()
+    """
+    Legge le misurazioni da un sensore via WebSocket e le invia a tutte le repliche.
+    
+    Args:
+        sensor_id: ID del sensore da cui leggere
+        master: Istanza di Master per il broadcast
+    """
+    ws_url = f'ws://{SIMULATOR_HOST}:8080/api/device/{sensor_id}/ws'
+    
+    try:
+        async with websockets.connect(ws_url) as websocket:
+            logger.info(f"✓ Connesso al sensore {sensor_id}")
+            
+            while True:
+                try:
+                    # 1. Ricevi la misurazione dal simulatore (JSON)
+                    measurement = await websocket.recv()
+                    
+                    # 2. Converti in bytes per il broadcast (il master.broadcast() invia bytes)
+                    measurement_bytes = measurement.encode() if isinstance(measurement, str) else measurement
+                    
+                    # 3. Invia la misurazione a TUTTE le repliche connesse
+                    # master.broadcast() fa:
+                    #   - Invia il dato a tutte le slave connection attive
+                    #   - Aspetta l'ACK da ogni replica
+                    #   - Rimuove le repliche che non rispondono (morte)
 
-            with open(f'data/{sensor_id}.jsonl', 'a') as f:
-                f.write(json.dumps(json.loads(measurement)) + '\n')
+                    '''GIOOOOO GUARDA QUI
+
+                    - quando faccio partire la funzione di broadcast succedono dei casini
+                    - lo lascio per te :)
+                    
+                    # results = master.broadcast(measurement_bytes)
+                    
+                    # # Log del risultato
+                    # if results:
+                    #     logger.debug(f"Sensore {sensor_id}: {len([r for r in results.values() if r])}/{len(results)} repliche ACKed")
+                    '''
+
+
+                except Exception as e:
+                    logger.error(f"Errore ricevendo dal sensore {sensor_id}: {e}")
+                    break
+                    
+    except Exception as e:
+        logger.error(f"Errore WebSocket per sensore {sensor_id}: {e}")
 
 
 def start_reading(sensor_id, master):
+    """Avvia un thread asincrono per leggere da un sensore"""
     asyncio.run(get_measures(sensor_id, master))
 
 
-def run():
+def run(master):
     '''
-        Start 12 different threads that concurrently read measures from sensors.
+        Start threads that concurrently read measures from sensors.
+        Mantiene il programma in vita
     '''
-    with ThreadPoolExecutor(max_workers=12) as executor:
+    with ThreadPoolExecutor(max_workers=len(ws_urls) if ws_urls else 1) as executor:
         sensors = ws_urls.keys()
         for sensor_id in sensors:
             executor.submit(start_reading, sensor_id, master)
+        
+        # Mantieni il programma in vita
+        logger.info("Thread di lettura sensori avviati, in attesa...")
+        while True:
+            time.sleep(1)  # Mantiene vivo il ThreadPoolExecutor
 
 
 async def start():
+    logger.info("Avvio Broker Master-Slave...")
     master = Master(host=HOST, port=PORT, num_slaves=5)
-
-    threading.Thread(target=master.accept_connection, daemon=True).start()
-
-    # Start threads for reading data
+    
+    # Avvia il server socket per accettare connessioni dalle repliche
+    accept_thread = threading.Thread(target=master.accept_connection, daemon=False)
+    accept_thread.start()
+    logger.info("Thread accept_connection avviato")
+    
+    # Avvia i thread di lettura dei sensori
     run(master)
 
 if __name__ == '__main__':

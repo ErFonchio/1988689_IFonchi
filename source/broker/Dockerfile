@@ -10,7 +10,7 @@ RUN pip install --no-cache-dir -r requirements.txt
 COPY custom_broker.py .
 
 # Espone la porta
-EXPOSE 5002
+EXPOSE 5000
 
 # Avvia l'app
 CMD ["python", "custom_broker.py"]

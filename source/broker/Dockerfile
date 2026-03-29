@@ -7,10 +7,10 @@ COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
 # Copia l'applicazione
-COPY app.py .
+COPY custom_broker.py .
 
 # Espone la porta
-EXPOSE 5000
+EXPOSE 5002
 
 # Avvia l'app
-CMD ["python", "app.py"]
+CMD ["python", "custom_broker.py"]

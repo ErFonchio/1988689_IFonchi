@@ -89,17 +89,6 @@ def control_stream():
         }
     )
 
-
-@app.route('/api/status', methods=['GET'])
-def status():
-    """Verifica connessione al simulatore"""
-    try:
-        response = requests.get(f"http://{SIMULATOR_HOST}:8080/api/status", timeout=2)
-        return jsonify({'status': 'connected', 'upstream': response.status_code == 200})
-    except:
-        return jsonify({'status': 'disconnected', 'upstream': False}), 503
-
-
 @app.route('/health', methods=['GET'])
 def health():
     """Health check"""

@@ -1,10 +1,11 @@
 import json, requests
 import asyncio, websockets
+import os
 from concurrent.futures import ThreadPoolExecutor
 
 ### First retireve devices
-url = "http://localhost:8080/api/devices"
-
+SIMULATOR_HOST = os.getenv('SIMULATOR_HOST', 'localhost')
+url = f"http://{SIMULATOR_HOST}:8080/api/devices"
 response = requests.get(url)
 
 if response.status_code == 200:
@@ -24,7 +25,8 @@ for device in devices:
 async def get_measures(sensor_id):
     ws_url = f'ws://localhost:8080/api/device/{sensor_id}/ws'
     async with websockets.connect(ws_url) as websocket:
-
+        
+        print("obtaining measures")
         while True:
             measurement = await websocket.recv()
 
@@ -32,10 +34,8 @@ async def get_measures(sensor_id):
                 f.write(json.dumps(json.loads(measurement)) + '\n')
 
 
-
 def start_reading(sensor_id):
     asyncio.run(get_measures(sensor_id))
-
 
 
 def run():

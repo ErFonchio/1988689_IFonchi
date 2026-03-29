@@ -8,6 +8,18 @@ services:
     networks:
       - seismic-network
 
+  broker:
+    build: ./broker
+    ports:
+      - "5002:5002"
+    networks:
+      - seismic-network
+    depends_on:
+      - simulator
+    environment:
+      - FLASK_ENV=production
+      - SIMULATOR_HOST=simulator
+
   replica:
     build: ./replica
     ports:
@@ -16,6 +28,7 @@ services:
       - seismic-network
     depends_on:
       - simulator
+      - broker
     environment:
       - FLASK_ENV=production
       - SIMULATOR_HOST=simulator

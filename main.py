@@ -5,7 +5,7 @@ ui.label('Fonchi Dashboard')
 
 def get_connection():
     return psycopg2.connect(
-        host="localhost",
+        host="127.0.0.1",
         database="FonchiDB",
         user="postgres",
         password="fonchi4ever",
@@ -33,23 +33,24 @@ def load_data():
     data = fetch_events()
 
     table.rows = [
-        {
-            "sensor": r[0],
-            "type": r[1],
-            "frequency": r[2],
-            "amplitude": r[3],
-            "timestamp": str(r[4]),
-        }
-        for r in data
-    ]
+    {
+        "sensor": r[0],
+        "type": r[1],
+        "timestamp": str(r[2]),
+        "frequency": r[3],
+        "amplitude": r[4],
+    }
+    for r in data
+]
 
 table = ui.table(
     columns=[
         {'name': 'sensor', 'label': 'Sensor', 'field': 'sensor'},
         {'name': 'type', 'label': 'Type', 'field': 'type'},
-        {'name': 'frequency', 'label': 'Frequency', 'field': 'frequency'},
-        {'name': 'amplitude', 'label': 'Amplitude', 'field': 'amplitude'},
         {'name': 'timestamp', 'label': 'Timestamp', 'field': 'timestamp'},
+        {'name': 'frequency', 'label': 'Frequency', 'field': 'frequency'},
+        {'name': 'amplitude', 'label': 'Amplitude', 'field': 'amplitude'}
+        
     ],
     rows=[]
 )

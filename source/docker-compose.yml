@@ -1,0 +1,96 @@
+version: '3.8'
+
+services:
+  simulator:
+    image: seismic-signal-simulator:multiarch_v1
+    ports:
+      - "8080:8080"
+    networks:
+      - seismic-network
+
+  broker:
+    build: ./broker
+    ports:
+      - "5010:5001"
+    networks:
+      - seismic-network
+    depends_on:
+      - simulator
+    environment:
+      - FLASK_ENV=production
+      - SIMULATOR_HOST=simulator
+
+  replica0:
+    build: ./replica
+    ports:
+      - "5001:5000"
+    networks:
+      - seismic-network
+    depends_on:
+      - simulator
+      - broker
+    environment:
+      - FLASK_ENV=production
+      - SIMULATOR_HOST=simulator
+      - BROKER_HOST=broker
+      - BROKER_PORT=5001
+  replica1:
+    build: ./replica
+    ports:
+      - "5002:5000"
+    networks:
+      - seismic-network
+    depends_on:
+      - simulator
+      - broker
+    environment:
+      - FLASK_ENV=production
+      - SIMULATOR_HOST=simulator
+      - BROKER_HOST=broker
+      - BROKER_PORT=5001
+  replica2:
+    build: ./replica
+    ports:
+      - "5003:5000"
+    networks:
+      - seismic-network
+    depends_on:
+      - simulator
+      - broker
+    environment:
+      - FLASK_ENV=production
+      - SIMULATOR_HOST=simulator
+      - BROKER_HOST=broker
+      - BROKER_PORT=5001
+  replica3:
+    build: ./replica
+    ports:
+      - "5004:5000"
+    networks:
+      - seismic-network
+    depends_on:
+      - simulator
+      - broker
+    environment:
+      - FLASK_ENV=production
+      - SIMULATOR_HOST=simulator
+      - BROKER_HOST=broker
+      - BROKER_PORT=5001
+  replica4:
+    build: ./replica
+    ports:
+      - "5005:5000"
+    networks:
+      - seismic-network
+    depends_on:
+      - simulator
+      - broker
+    environment:
+      - FLASK_ENV=production
+      - SIMULATOR_HOST=simulator
+      - BROKER_HOST=broker
+      - BROKER_PORT=5001
+
+networks:
+  seismic-network:
+    driver: bridge

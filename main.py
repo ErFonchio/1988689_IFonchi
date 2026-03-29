@@ -14,19 +14,19 @@ ui.label('Fonchi Dashboard').classes('text-3xl font-bold mt-6 mb-4 text-white')
 all_rows = []
 event_tables = []
 event_labels = []
-event_table_keys = ['heartquack', 'conventional_explosion', 'nuclear_like']
-event_table_titles = ['heartquack', 'conventional_explosion', 'nuclear_like']
-event_type_aliases = {
-    'heartquack': 'heartquack',
-    'heartquake': 'heartquack',
-    'earthquake': 'heartquack',
-    'conventional_explosion': 'conventional_explosion',
-    'conventional explosion': 'conventional_explosion',
-    'conventional-explosion': 'conventional_explosion',
-    'nuclear_like': 'nuclear_like',
-    'nuclear like': 'nuclear_like',
-    'nuclear-like': 'nuclear_like',
-}
+event_table_keys = ['earthquake', 'conventional_explosion', 'nuclear_like']
+event_table_titles = ['earthquake', 'conventional explosion', 'nuclear like']
+#event_type_aliases = {
+#    'heartquack': 'heartquack',
+#    'heartquake': 'heartquack',
+#    'earthquake': 'heartquack',
+#    'conventional_explosion': 'conventional_explosion',
+#    'conventional explosion': 'conventional_explosion',
+#    'conventional-explosion': 'conventional_explosion',
+#    'nuclear_like': 'nuclear_like',
+#    'nuclear like': 'nuclear_like',
+#    'nuclear-like': 'nuclear_like',
+#}
 
 
 def get_connection():
@@ -75,19 +75,17 @@ def apply_filters():
         event_labels[index].set_text(event_table_titles[index])
         event_tables[index].rows = grouped.get(event_key, [])
 
-    selected_label.set_text(f'Selected sensor: {sensor_filter.value}')
-
 
 def load_data():
     global all_rows
     data = fetch_events()
     all_rows = []
     for r in data:
-        raw_type = str(r[1]).strip().lower()
-        normalized_type = event_type_aliases.get(raw_type, raw_type.replace(' ', '_'))
+        #raw_type = str(r[1]).strip().lower()
+        #normalized_type = event_type_aliases.get(raw_type, raw_type.replace(' ', '_'))
         all_rows.append({
             'sensor': r[0],
-            'type': normalized_type,
+            'type': r[1],
             'timestamp': str(r[2]),
             'frequency': r[3],
             'amplitude': r[4],
@@ -101,15 +99,17 @@ with ui.card().classes('w-full max-w-6xl mx-auto p-4 shadow-lg'):
     sensor_options = ['All sensors'] + [f'sensor-{i:02d}' for i in range(1, 13)]
     with ui.row().classes('items-center gap-3 flex-wrap mb-4'):
         ui.markdown('**Sensor filtering**').classes('text-sm font-semibold whitespace-nowrap')
-        sensor_filter = ui.select(sensor_options, label='Filter sensor', value='All sensors').classes('w-full sm:w-1/3')
-        selected_label = ui.label('Selected: All sensors').classes('text-sm text-grey-500')
+        sensor_filter = ui.select(sensor_options, label='Filter sensor', value='All sensors').classes('flix1')
+
 
     sensor_filter.on('update:modelValue', lambda e: apply_filters())
 
     with ui.row().classes('gap-4 flex-wrap'):
         for index in range(3):
             with ui.card().classes('flex-1 min-w-[320px] p-4'):
-                event_labels.append(ui.label(event_table_titles[index]).classes('mb-3 text-base font-semibold'))
+                with ui.row().classes('items-center justify-between mb-3'):
+                    event_labels.append(ui.label(event_table_titles[index]).classes('text-base font-semibold'))
+                    ui.button('', on_click=load_data).props('icon=refresh color=primary round').classes('w-7 h-7 text-xs')
                 event_tables.append(ui.table(
                     columns=[
                         {'name': 'sensor', 'label': 'Sensor', 'field': 'sensor', 'sortable': True},
@@ -119,9 +119,6 @@ with ui.card().classes('w-full max-w-6xl mx-auto p-4 shadow-lg'):
                     ],
                     rows=[],
                 ).classes('w-full'))
-
-    with ui.row().classes('items-center justify-between gap-2 mt-4'):
-        ui.button('Refresh data', on_click=load_data).props('color=primary glossy')
 
 
 load_data()

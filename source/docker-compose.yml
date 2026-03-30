@@ -91,6 +91,26 @@ services:
       - BROKER_HOST=broker
       - BROKER_PORT=5001
 
+postgres:
+  image: postgres:16
+  container_name: fonchi
+  restart: always
+  environment:
+    POSTGRES_USER: postgres
+    POSTGRES_PASSWORD: "fonchi4ever"
+    POSTGRES_DB: FonchiDB
+  ports:
+    - "5432:5432"
+  volumes:
+    - postgres_data:/var/lib/postgresql/data
+    - ./database.sql:/docker-entrypoint-initdb.d/init.sql
+  networks:
+    - seismic-network
+      
+volumes:
+  postgres_data:
+
 networks:
   seismic-network:
     driver: bridge
+

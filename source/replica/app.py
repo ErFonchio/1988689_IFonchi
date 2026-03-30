@@ -30,9 +30,9 @@ sse_queue = Queue(maxsize=100)
 stream_thread = None
 stream_connected = False
 
-# Sliding window automatica - mantiene solo gli ultimi 100 elementi
-# Quando aggiungi il 101°, il primo viene scartato automaticamente
-data_window = deque(maxlen=1000)
+# Sliding window automatica - mantiene solo gli ultimi n elementi
+window_length = 1200
+data_window = deque(maxlen=window_length)
 
 # ACK constant per broker communication
 ACK = b"ACK"
@@ -72,14 +72,23 @@ class SlaveClient:
         # get data from broker, and send ack
         while True:
             data = self.sock.recv(4096)
+            
+            if data == LEADER:
+                    self.leader = True
             measures = json.loads(data.decode())
 
             # adding elemnets elements to sliding window
             data_window.append(measures)
 
-            if self.count % 200 == 0:
+            if (self.count % 200) == 0:
                 logger.info(f"Received data: {measures}")
-                frequency_analysis()
+            
+            '''da implementare quando sarà disponibile'''
+            # if self.leader:
+            #     frequency_analysis()
+            if (self.count % window_length) == 0:
+                logger.info(f"entering frequency analysis")
+                frequency_analysis(data_window)
 
             self.count += 1
             
@@ -157,62 +166,74 @@ def get_stream_from_queue():
             # Timeout dalla coda - invia heartbeat
             yield ":\n\n"
 
-def frequency_analysis():
-    '''analyse dequeue'''
+def frequency_analysis(data_window):
+    '''Analizza frequenze per ogni ID sensore'''
     
     if len(data_window) < 2:
         logger.warning("Non abbastanza dati per l'analisi")
         return None
     
     try:
-        # 1. Estrai timestamp e valori
-        timestamps = []
-        values = []
+        # 1. quali id mi sono arrivati?
+        window_ids = set([sample['sensor_id'][-2:] for sample in data_window])
+        logger.info(f"window_ids {window_ids}")
+
+        data_id = {}
+        for id_ in window_ids:
+            data_id[id_] = {'timestamps': [], 'values': []}
         
+        # 2. Popola data_id con i campioni dalla finestra
         for sample in data_window:
             data = json.loads(sample) if isinstance(sample, str) else sample
-            timestamps.append(datetime.fromisoformat(data['timestamp']))
-            values.append(float(data['value']))
-        
-        # Verifica ordine temporale
-        time_ordered = all(timestamps[i] <= timestamps[i+1] for i in range(len(timestamps)-1))
-        logger.info(f"Ordine temporale: {'✓ OK' if time_ordered else '✗ VIOLATO'}")
+            sensor_id = data['sensor_id'][-2:]  # Estrae l'ID dal sample
+            data_id[sensor_id]['timestamps'].append(datetime.fromisoformat(data['timestamp']))
+            data_id[sensor_id]['values'].append(float(data['value']))
 
-        # Verifica l'unicità dei sample
-        # set_len = len(list(set(timestamps)))
-        # list_len = len(timestamps)
-        # time_set = set_len == list_len
-        # logger.info(f"Unicità dei sample: {'✓ OK' if time_set else '✗ VIOLATO', set_len}")
-
+        # 3. Analizza ogni sensore
+        results = {}
+        for sensor_id, sensor_data in data_id.items():
+            logger.info(f"Analizzando le frequenze di {sensor_id}")
+            timestamps = sensor_data['timestamps']
+            values = sensor_data['values']
+            
+            if len(timestamps) < 2:
+                results[sensor_id] = {'error': 'Not enough data', 'sample_count': 0}
+                logger.warning(f"Not enough timestamps per id {sensor_id}")
+                continue
+            
+            # Verifica ordine temporale
+            time_ordered = all(timestamps[i] <= timestamps[i+1] for i in range(len(timestamps)-1))
+            
+            # Calcola intervallo temporale medio (sample rate)
+            time_diffs = [(timestamps[i+1] - timestamps[i]).total_seconds() 
+                          for i in range(len(timestamps)-1)]
+            avg_dt = np.mean(time_diffs)
+            sample_rate = 1 / avg_dt if avg_dt > 0 else 1
+            
+            # FFT per trovare frequenza dominante
+            fft_values = np.fft.fft(values)
+            freqs = np.fft.fftfreq(len(values), avg_dt)
+            power = np.abs(fft_values) ** 2
+            
+            # Prendi solo frequenze positive
+            idx = np.where(freqs > 0)[0]
+            dominant_freq = freqs[idx][np.argmax(power[idx])]
+            
+            results[sensor_id] = {
+                'temporal_order_ok': time_ordered,
+                'sample_count': len(timestamps),
+                'sample_rate': sample_rate,
+                'dominant_frequency': dominant_freq,
+                'avg_time_interval': avg_dt
+            }
+            
+            logger.info(f"Sensore {sensor_id}: {len(timestamps)} samples, freq={dominant_freq:.2f} Hz, ordered={time_ordered}")
         
-        # Calcola intervallo temporale medio (sample rate)
-        time_diffs = [(timestamps[i+1] - timestamps[i]).total_seconds() 
-                      for i in range(len(timestamps)-1)]
-        avg_dt = np.mean(time_diffs)
-        sample_rate = 1 / avg_dt if avg_dt > 0 else 1
-        
-        # 4. FFT per trovare frequenza dominante
-        fft_values = np.fft.fft(values)
-        freqs = np.fft.fftfreq(len(values), avg_dt)
-        power = np.abs(fft_values) ** 2
-        
-        # Prendi solo frequenze positive
-        idx = np.where(freqs > 0)[0]
-        dominant_freq = freqs[idx][np.argmax(power[idx])]
-        
-        return {
-            'temporal_order_ok': time_ordered,
-            'sample_count': len(data_window),
-            'sample_rate': sample_rate,
-            'dominant_frequency': dominant_freq,
-            'avg_time_interval': avg_dt
-        }
+        return results
         
     except Exception as e:
         logger.error(f"Errore nell'analisi: {e}")
         return None
-
-
 
 def connect_to_broker():
     """Thread che rimane connesso al broker e invia i dati usando SlaveClient"""

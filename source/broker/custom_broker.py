@@ -15,6 +15,9 @@ logger = logging.getLogger(__name__)
 SIMULATOR_HOST = os.getenv('SIMULATOR_HOST', 'localhost')
 url = f"http://{SIMULATOR_HOST}:8080/api/devices"
 
+FRONTEND_HOST = os.getenv("FRONTEND_HOST", 'localhost')
+FRONTEND_PORT = int(os.getenv("FRONTEND_PORT", 8765))
+
 # Retry fino a 30 secondi per attendere il simulatore
 devices = []
 max_retries = 6  # 6 tentativi x 5 secondi = 30 secondi
@@ -70,7 +73,7 @@ async def broadcast_to_ui(data: dict):
         await asyncio.gather(*[c.send(message) for c in clients], return_exceptions=True)
 
 async def start_ui_server():
-    async with websockets.serve(ui_handler, "0.0.0.0", 8765):   # CAREFUL HERE TO PORT NUMBER AND HOST
+    async with websockets.serve(ui_handler, FRONTEND_HOST, FRONTEND_PORT):   
         await asyncio.Future()  # run forever
 
 

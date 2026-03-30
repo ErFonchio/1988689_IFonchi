@@ -1,17 +1,18 @@
 import psycopg2
 from nicegui import ui
-from reportlab.pdfgen import canvas
 from datetime import datetime
 from pathlib import Path
 
 ui.add_head_html('''
-    <style>
-        html, body {
-            background-color: #0f172a;
-        }
-    </style>
+<style>
+html, body {
+    background-color: #0f172a;
+    background-image:
+        repeating-linear-gradient(45deg, rgba(0,0,0,0.15) 0px, rgba(0,0,0,0.15) 3px, transparent 1px, transparent 30px),
+        repeating-linear-gradient(-45deg, rgba(0,0,0,0.15) 0px, rgba(0,0,0,0.15) 3px, transparent 1px, transparent 30px);
+}
+</style>
 ''')
-
 ui.label('Fonchi Dashboard').classes('text-3xl font-bold mt-6 mb-4 text-white')
 
 all_rows = []
@@ -155,7 +156,8 @@ def open_realtime_measurements():
                         rows = get_realtime_rows()
 
                         if realtime_sensor_select.value != 'All sensors':
-                            last_points = rows[:50][::-1]
+
+                            last_points = rows[:20][::-1]   
 
                             x = [r['timestamp'].strftime('%H:%M:%S') for r in last_points]
                             y = [r['sensor_value'] for r in last_points]
@@ -177,7 +179,7 @@ def open_realtime_measurements():
                 ui.button(on_click=dialog.close).props('icon=close flat round dense').classes('text-gray-400 hover:text-red-400')
             with ui.row().classes('items-center gap-4 mb-4'):
                 realtime_sensor_select = ui.select(sensor_options, label='Filter sensor', value='All sensors').classes('w-56')
-                show_chart_button = ui.button('Mostra grafico', on_click=open_chart_dialog).classes('rounded-lg px-4 py-2 bg-gray-600 text-white')
+                show_chart_button = ui.button('SHOW CHART', on_click=open_chart_dialog).props('flat no-caps').classes('rounded-lg px-4 py-2 bg-gray-800 text-white')
 
             realtime_table = ui.table(
                 columns=[

@@ -72,7 +72,11 @@ class SlaveClient:
         # get data from broker, and send ack
         while True:
             data = self.sock.recv(4096)
-            
+
+            if not data:
+                break 
+
+            # Check if the master is electing me as leader
             if data == LEADER:
                     self.leader = True
             measures = json.loads(data.decode())
@@ -91,10 +95,6 @@ class SlaveClient:
                 frequency_analysis(data_window)
 
             self.count += 1
-            
-            if not data:
-                break 
-
             # send ACK 
             self.sock.sendall(ACK)
         try:

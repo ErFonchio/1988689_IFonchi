@@ -2,6 +2,10 @@ import psycopg2
 from nicegui import ui
 from datetime import datetime
 from pathlib import Path
+import websockets
+import asyncio
+import json
+from nicegui import app
 
 ui.add_head_html('''
 <style>
@@ -22,6 +26,7 @@ event_table_keys = ['earthquake', 'conventional_explosion', 'nuclear_like']
 event_table_titles = ['earthquake', 'conventional explosion', 'nuclear like']
 
 chart=None
+live_data = []   
 
 def get_connection():
     return psycopg2.connect(
@@ -37,9 +42,9 @@ def fetch_events():
     cur = conn.cursor()
 
     cur.execute("""
-        SELECT sensor_id, event_type, timestamp, frequency 
+        SELECT sensor_id, event_type, startstamp, endstamp, frequency 
         FROM events
-        ORDER BY timestamp DESC
+        ORDER BY startstamp DESC
     """)
 
     rows = cur.fetchall()
@@ -69,15 +74,21 @@ def apply_filters():
         event_tables[index].rows = grouped.get(event_key, [])
 
 
-def fetch_measurements():
-    conn = get_connection()
-    cur = conn.cursor()
-    cur.execute('SELECT sensor_id, sensor_value, timestamp FROM measurements ORDER BY timestamp DESC;')
-    rows = cur.fetchall()
-    conn.close()
-    return [
-        {'sensor_id': r[0], 'sensor_value': r[1], 'timestamp': r[2]} for r in rows
-    ]
+async def listen():
+    global live_data
+
+    async with websockets.connect("ws://broker:8765") as ws:
+        async for message in ws:
+            data = json.loads(message)
+
+            # normalizza formato
+            new_row = {
+                'sensor_id': data['sensor_id'],
+                'sensor_value': data['value'],
+                'timestamp': datetime.fromisoformat(data['timestamp'])
+            }
+
+            live_data.insert(0, new_row)
 
 async def export_png():
     data_url = await chart.run_chart_method('getDataURL', {'type': 'png'})
@@ -91,17 +102,19 @@ async def export_png():
     with open(filename, "wb") as f:
         f.write(base64.b64decode(img_data))
 
-    ui.notify("PNG salvato in Downloads ✅")
+    ui.notify("PNG salvato in Downloads!")
 
 def open_realtime_measurements():
     all_measurements = fetch_measurements()
     sensor_options = ['All sensors'] + [f'sensor-{i:02d}' for i in range(1, 13)]
 
     def get_realtime_rows():
-        rows = fetch_measurements()
-        if realtime_sensor_select.value and realtime_sensor_select.value != 'All sensors':
-            rows = [r for r in rows if r['sensor_id'] == realtime_sensor_select.value]
-        return rows
+        rows = live_data
+
+    if realtime_sensor_select.value != 'All sensors':
+        rows = [r for r in rows if r['sensor_id'] == realtime_sensor_select.value]
+
+    return rows
 
     chart = None
     #chart_data = []
@@ -148,7 +161,7 @@ def open_realtime_measurements():
                             'lineStyle': {
                                 'width': 3
                             },
-                            'areaStyle': {}  # effetto riempimento 🔥
+                            'areaStyle': {}  
                         }]
                     }).classes('w-full h-[80vh]')
 
@@ -293,4 +306,5 @@ with ui.card().classes('w-full max-w-6xl mx-auto p-4 shadow-lg'):
 
 load_data()
 
+app.on_startup(listen)
 ui.run()

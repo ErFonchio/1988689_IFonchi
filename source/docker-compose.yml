@@ -12,7 +12,7 @@ services:
     build: ./broker
     ports:
       - "5010:5001"
-      - "5011:5000"
+      - "8765:8765"
     networks:
       - seismic-network
     depends_on:
@@ -20,6 +20,8 @@ services:
     environment:
       - FLASK_ENV=production
       - SIMULATOR_HOST=simulator
+      - FRONTEND_HOST=0.0.0.0
+      - FRONTEND_PORT=8765
 
   frontend:
     build: ./frontend
@@ -33,7 +35,7 @@ services:
     environment:
       - FLASK_ENV=production
       - BROKER_HOST=broker
-      - BROKER_PORT=5000
+      - BROKER_PORT=8765
   
 
   replica0:

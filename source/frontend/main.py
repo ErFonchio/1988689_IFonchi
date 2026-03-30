@@ -98,6 +98,7 @@ async def listen():
             logger.info(f"Tentativo di connessione al broker {retry_count + 1}/{max_retries}")
             async with websockets.connect(f"ws://{BROKER_HOST}:{BROKER_PORT}") as ws:
                 logger.info("✓ FRONTEND connesso con BROKER")
+
                 async for message in ws:
                     data = json.loads(message)
 

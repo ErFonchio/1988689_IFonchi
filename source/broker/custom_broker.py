@@ -73,7 +73,7 @@ async def broadcast_to_ui(data: dict):
         await asyncio.gather(*[c.send(message) for c in clients], return_exceptions=True)
 
 async def start_ui_server():
-    async with websockets.serve(ui_handler, FRONTEND_HOST, FRONTEND_PORT):   
+    async with websockets.serve(ui_handler, '0.0.0.0', 5000):   
         await asyncio.Future()  # run forever
 
 

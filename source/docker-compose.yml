@@ -12,6 +12,7 @@ services:
     build: ./broker
     ports:
       - "5010:5001"
+      - "5011:5000"
     networks:
       - seismic-network
     depends_on:
@@ -32,7 +33,7 @@ services:
     environment:
       - FLASK_ENV=production
       - BROKER_HOST=broker
-      - BROKER_PORT=5001
+      - BROKER_PORT=5000
   
 
   replica0:
@@ -115,7 +116,7 @@ services:
       POSTGRES_PASSWORD: "fonchi4ever"
       POSTGRES_DB: FonchiDB
     ports:
-      - "5432:5432"
+      - "5500:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
       - ./db/database.sql:/docker-entrypoint-initdb.d/init.sql

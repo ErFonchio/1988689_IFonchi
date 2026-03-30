@@ -35,7 +35,7 @@ services:
     environment:
       - FLASK_ENV=production
       - BROKER_HOST=broker
-      - BROKER_PORT=8765
+      - BROKER_PORT=5000
   
 
   replica0:

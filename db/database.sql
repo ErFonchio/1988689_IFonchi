@@ -3,7 +3,6 @@ CREATE TABLE IF NOT EXISTS events (
     event_type TEXT NOT NULL,
     timestamp TIMESTAMPTZ NOT NULL,
     frequency DOUBLE PRECISION NOT NULL,
-    amplitude DOUBLE PRECISION,
     PRIMARY KEY (sensor_id, timestamp)
 );
 

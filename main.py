@@ -32,10 +32,9 @@ def fetch_events():
     cur = conn.cursor()
 
     cur.execute("""
-        SELECT sensor_id, event_type, timestamp, frequency, amplitude 
+        SELECT sensor_id, event_type, timestamp, frequency 
         FROM events
         ORDER BY timestamp DESC
-        LIMIT 50;
     """)
 
     rows = cur.fetchall()
@@ -74,8 +73,7 @@ def load_data():
             'sensor': r[0],
             'type': r[1],
             'timestamp': str(r[2]),
-            'frequency': r[3],
-            'amplitude': r[4],
+            'frequency': r[3]
         })
     apply_filters()
 
@@ -102,8 +100,7 @@ with ui.card().classes('w-full p-4 shadow-lg'):
                     columns=[
                         {'name': 'sensor', 'label': 'Sensor', 'field': 'sensor', 'sortable': True},
                         {'name': 'timestamp', 'label': 'Timestamp', 'field': 'timestamp', 'sortable': True},
-                        {'name': 'frequency', 'label': 'Frequency', 'field': 'frequency', 'sortable': True},
-                        {'name': 'amplitude', 'label': 'Amplitude', 'field': 'amplitude', 'sortable': True},
+                        {'name': 'frequency', 'label': 'Frequency', 'field': 'frequency', 'sortable': True}
                     ],
                     rows=[],
                 ).classes('w-full cursor-pointer hover:opacity-75 transition-opacity')
@@ -120,8 +117,7 @@ with ui.card().classes('w-full p-4 shadow-lg'):
                                 columns=[
                                     {'name': 'sensor', 'label': 'Sensor', 'field': 'sensor', 'sortable': True},
                                     {'name': 'timestamp', 'label': 'Timestamp', 'field': 'timestamp', 'sortable': True},
-                                    {'name': 'frequency', 'label': 'Frequency', 'field': 'frequency', 'sortable': True},
-                                    {'name': 'amplitude', 'label': 'Amplitude', 'field': 'amplitude', 'sortable': True},
+                                    {'name': 'frequency', 'label': 'Frequency', 'field': 'frequency', 'sortable': True}
                                 ],
                                 rows=event_tables[idx].rows,
                             ).classes('w-full')

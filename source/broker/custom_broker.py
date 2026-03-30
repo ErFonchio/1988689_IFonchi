@@ -7,6 +7,7 @@ import threading
 import time 
 import logging
 
+
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
@@ -38,6 +39,40 @@ if devices:
     logger.info(f"WebSocket URLs recuperati per {len(ws_urls)} dispositivi")
 else:
     logger.warning("Nessun dispositivo trovato dal simulatore!")
+
+
+
+###  CONNECTION TO THE GUI
+
+ui_clients = set()
+ui_clients_lock = asyncio.Lock()
+
+async def ui_handler(websocket):
+    # Register a new UI client and keep the connection alive
+
+    async with ui_clients_lock:
+        ui_clients.add(websocket)
+
+    try:
+        await websocket.wait_closed()
+    finally:
+        async with ui_clients_lock:
+            ui_clients.discard(websocket)
+
+async def broadcast_to_ui(data: dict):
+    # Function to broadcast data to the dashboard
+
+    async with ui_clients_lock:
+        clients = list(ui_clients)
+    
+    if clients:
+        message = json.dumps(data)
+        await asyncio.gather(*[c.send(message) for c in clients], return_exceptions=True)
+
+async def start_ui_server():
+    async with websockets.serve(ui_handler, "0.0.0.0", 8765):   # CAREFUL HERE TO PORT NUMBER AND HOST
+        await asyncio.Future()  # run forever
+
 
 
 ### CLASSES FOR HANDLING CONNECTION WITH SLAVES
@@ -256,6 +291,9 @@ async def get_measures(sensor_id, master: Master):
                     # add the sensor id
                     data['sensor_id'] = sensor_id
 
+                    # send data to the GUI
+                    await broadcast_to_ui(data)
+
                     # encode file 
                     data = json.dumps(data).encode()
 
@@ -270,25 +308,25 @@ async def get_measures(sensor_id, master: Master):
         logger.error(f"Errore WebSocket per sensore {sensor_id}: {e}")
 
 
-def start_reading(sensor_id, master):
-    """Avvia un thread asincrono per leggere da un sensore"""
-    asyncio.run(get_measures(sensor_id, master))
-
-
-def run(master):
-    '''
-        Start threads that concurrently read measures from sensors.
-        Mantiene il programma in vita
-    '''
-    with ThreadPoolExecutor(max_workers=len(ws_urls) if ws_urls else 1) as executor:
-        sensors = ws_urls.keys()
-        for sensor_id in sensors:
-            executor.submit(start_reading, sensor_id, master)
-        
-        # Mantieni il programma in vita
-        logger.info("Thread di lettura sensori avviati, in attesa...")
-        while True:
-            time.sleep(1)  # Mantiene vivo il ThreadPoolExecutor
+#def start_reading(sensor_id, master):
+#    """Avvia un thread asincrono per leggere da un sensore"""
+#    asyncio.run(get_measures(sensor_id, master))
+#
+#
+#def run(master):
+#    '''
+#        Start threads that concurrently read measures from sensors.
+#        Mantiene il programma in vita
+#    '''
+#    with ThreadPoolExecutor(max_workers=len(ws_urls) if ws_urls else 1) as executor:
+#        sensors = ws_urls.keys()
+#        for sensor_id in sensors:
+#            executor.submit(start_reading, sensor_id, master)
+#        
+#        # Mantieni il programma in vita
+#        logger.info("Thread di lettura sensori avviati, in attesa...")
+#        while True:
+#            time.sleep(1)  # Mantiene vivo il ThreadPoolExecutor
 
 
 async def start():
@@ -301,7 +339,12 @@ async def start():
     logger.info("Thread accept_connection avviato")
     
     # Avvia i thread di lettura dei sensori
-    run(master)
+    #run(master)
+
+    await asyncio.gather(
+        start_ui_server(),
+        *[get_measures(sid, master) for sid in ws_urls.keys()]
+    )
 
 if __name__ == '__main__':
     asyncio.run(start())

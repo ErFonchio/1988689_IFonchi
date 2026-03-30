@@ -18,7 +18,7 @@ html, body {
 </style>
 ''')
 ui.label('Fonchi Dashboard').classes('text-3xl font-bold mt-6 mb-4 text-white')
-
+ 
 all_rows = []
 event_tables = []
 event_labels = []

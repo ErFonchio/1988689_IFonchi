@@ -90,20 +90,61 @@ def apply_filters():
 async def listen():
     global live_data
 
-    async with websockets.connect(f"ws://{BROKER_HOST}:{BROKER_PORT}") as ws:
-        async for message in ws:
-            data = json.loads(message)
+    while True:
+        try:
+            async with websockets.connect(f"ws://{BROKER_HOST}:{BROKER_PORT}") as ws:
+                logging.info("FRONTEND connencted with BROKER")
+                async for message in ws:
+                    data = json.loads(message)
 
-            logging.info("FRONTEND connencted with BROKER")
+                    # normalizza formato
+                    new_row = {
+                        'sensor_id': data['sensor_id'],
+                        'sensor_value': data['value'],
+                        'timestamp': datetime.fromisoformat(data['timestamp'])
+                    }
 
-            # normalizza formato
-            new_row = {
-                'sensor_id': data['sensor_id'],
-                'sensor_value': data['value'],
-                'timestamp': datetime.fromisoformat(data['timestamp'])
-            }
+                    live_data.insert(0, new_row)
 
-            live_data.insert(0, new_row)
+        except (ConnectionRefusedError, OSError) as e:
+            logger.warning(f"Broker not ready, retrying in 3 seconds... ({e})")
+            await asyncio.sleep(3)
+
+        except Exception as e:
+            logger.error(f"Unexpected error: {e}")
+            await asyncio.sleep(3)
+
+#async def listen():
+#    global live_data
+#    
+#    max_retries = 10
+#    retry_count = 0
+#
+#    while retry_count < max_retries:
+#        try:
+#            logger.info(f"Tentativo di connessione al broker {retry_count + 1}/{max_retries}")
+#            async with websockets.connect(f"ws://{BROKER_HOST}:{BROKER_PORT}") as ws:
+#                logger.info("✓ FRONTEND connesso con BROKER")
+#                async for message in ws:
+#                    data = json.loads(message)
+#
+#                    # normalizza formato
+#                    new_row = {
+#                        'sensor_id': data['sensor_id'],
+#                        'sensor_value': data['value'],
+#                        'timestamp': datetime.fromisoformat(data['timestamp'])
+#                    }
+#
+#                    live_data.insert(0, new_row)
+#        
+#        except Exception as e:
+#            retry_count += 1
+#            logger.error(f"Errore connessione broker: {e}, tentativo {retry_count}/{max_retries}")
+#            if retry_count < max_retries:
+#                await asyncio.sleep(2)  # Attendi 2 secondi prima di retry
+#            else:
+#                logger.error("Impossibile connettersi al broker após 10 tentativi")
+
 
 async def export_png():
     data_url = await chart.run_chart_method('getDataURL', {'type': 'png'})

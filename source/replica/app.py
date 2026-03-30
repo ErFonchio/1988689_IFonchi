@@ -82,7 +82,10 @@ class SlaveClient:
             else:
 
                 measures = json.loads(data.decode())
+                '''invio a frontend'''
+
                 data_window.append(measures)
+                
                 self.count += 1
 
                 if (self.count % 200) == 0:
@@ -91,6 +94,8 @@ class SlaveClient:
                 if (self.leader == True) and (self.count % window_length) == 0:
                     logger.info(f"entering frequency analysis")
                     frequency_analysis(data_window)
+
+                    '''invio dell'analisi delle frequenze a database + frontend'''
 
             # send ACK 
             self.sock.sendall(ACK)
@@ -198,8 +203,6 @@ def frequency_analysis(data_window):
                 logger.warning(f"Not enough timestamps per id {sensor_id}")
                 continue
             
-            # Verifica ordine temporale
-            time_ordered = all(timestamps[i] <= timestamps[i+1] for i in range(len(timestamps)-1))
             
             # Calcola intervallo temporale medio (sample rate)
             time_diffs = [(timestamps[i+1] - timestamps[i]).total_seconds() 
@@ -215,16 +218,18 @@ def frequency_analysis(data_window):
             # Prendi solo frequenze positive
             idx = np.where(freqs > 0)[0]
             dominant_freq = freqs[idx][np.argmax(power[idx])]
+
+            # sensor_ id, event_type, interval_start, interval_end, frequency
             
             results[sensor_id] = {
-                'temporal_order_ok': time_ordered,
-                'sample_count': len(timestamps),
-                'sample_rate': sample_rate,
+                'sensory_id': sensor_id,
+                'event_type': "earthquake" if 0.5 <= dominant_freq < 3.0 else ("conventional-explosion" if 3.0 <= dominant_freq < 8.0 else ("base" if dominant_freq < 0.5 else "nuclear-like")),
+                'interval_start': timestamps[0],
+                'interval_end': timestamps[-1], 
                 'dominant_frequency': dominant_freq,
-                'avg_time_interval': avg_dt
             }
             
-            logger.info(f"Sensore {sensor_id}: {len(timestamps)} samples, freq={dominant_freq:.2f} Hz, ordered={time_ordered}")
+            logger.info(f"Sensore {sensor_id}: freq={dominant_freq:.2f} Hz, event_type {results[sensor_id]['event_type']}")
         
         return results
         

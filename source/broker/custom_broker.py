@@ -46,15 +46,18 @@ ACK = b"ACK"
 ACK_TIMEOUT = 5.0 
 HEARTBEAT_INTERVAL = 10.0
 
+LEADER = b"LEADER"
+
 PORT = 5001  # Socket server per Master-Slave (diverso da REST API)
 HOST = "0.0.0.0"  # Ascolta da qualsiasi interfaccia (Docker-ready)
 
 class SlaveConnection:
-    def __init__(self, conn: socket.socket, slave_id: int, addr):
+    def __init__(self, conn: socket.socket, slave_id: int, addr, leader: bool):
         self.conn = conn 
         self.slave_id = slave_id
         self.addr = addr 
         self.alive = True 
+        self.leader = False
         self.lock = threading.Lock()    # ← to synchronize threads 
 
     def send_and_ack(self, data: bytes) -> bool:
@@ -96,6 +99,9 @@ class Master:
         self.slaves: list[SlaveConnection] = []
         self.slaves_lock = threading.Lock()
 
+        # just for handling printing
+        self.count = 1
+
     ## Set-up connection
 
     def accept_connection(self):
@@ -116,7 +122,8 @@ class Master:
                     while True:
                         try:
                             conn, addr = server.accept()
-                            slave = SlaveConnection(conn, self.slave_id, addr)
+                            slave = SlaveConnection(conn, self.slave_id, addr, leader=False)
+
                             self.slave_id += 1
 
                             with self.slaves_lock:
@@ -143,8 +150,42 @@ class Master:
     def broadcast(self, data: bytes):
         threads, results = [], {}
 
+        '''
+        Before starting to broadcast the data, we check if the system has an active leader.
+        If this is not the case we elect a new leader scanning the list of active slaves
+        '''
+
+        #leader_elected = False
         with self.slaves_lock:
+            # Retrieve active slaves
             active_slaves = [s for s in self.slaves if s.alive]
+#
+        #    # Check if there is an alive leader
+        #    for s in active_slaves:
+        #        if s.leader:
+        #            leader_elected = True 
+        #            break 
+#
+        #if not leader_elected:
+        #    attempts = 3
+        #    if len(active_slaves) > 0:
+        #        # elect as leader the first slave in the list
+        #        for _ in attempts:
+        #            elected = False
+        #            for s in active_slaves:
+        #                # communicate to the slave that he is the new leader
+        #                if s.send_and_ack(LEADER):
+        #                    s.leader = True
+        #                    logger.info(f"Elected leader slave {s.slave_id}") 
+        #                    elected = True
+        #                    break
+        #                else:
+        #                    logger.warning(f"Something went wrong when tried to elect a new leader")
+        #            
+        #            # If successfully elected new leader exit
+        #            if elected:
+        #                break
+#
 
         # broadcast data to active slaves
         def send(slave: SlaveConnection):
@@ -203,7 +244,17 @@ async def get_measures(sensor_id, master: Master):
                 try:
                     # 1. Ricevi la misurazione dal simulatore (JSON)
                     measurement = await websocket.recv()
-                    data = json.dumps(json.loads(measurement)).encode()
+
+                    # transform the json file in a python dictiorary
+                    data = json.loads(measurement)
+
+                    # add the sensor id
+                    data['sensor_id'] = sensor_id
+
+                    # encode file 
+                    data = json.dumps(data).encode()
+
+                    # broadcast data
                     master.broadcast(data)
 
                 except Exception as e:

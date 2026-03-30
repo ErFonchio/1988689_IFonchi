@@ -36,12 +36,14 @@ data_window = deque(maxlen=1000)
 
 # ACK constant per broker communication
 ACK = b"ACK"
+LEADER = b"LEADER"
 
 class SlaveClient:
     """Client slave che si connette al broker master"""
     def __init__(self, master_host: str, master_port: int, max_retries: int = 10):
         self.sock = None
         self.max_retries = max_retries
+        self.leader = False
         self._connect(master_host, master_port)
 
         ## Just for printing
@@ -56,6 +58,7 @@ class SlaveClient:
                 self.sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
                 self.sock.connect((master_host, master_port))
                 logger.info(f"✓ SlaveClient CONNESSO a {master_host}:{master_port}")
+
                 return
             except Exception as e:
                 logger.warning(f"Tentativo {attempt + 1}/{self.max_retries} fallito: {e}")

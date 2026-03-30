@@ -1,5 +1,8 @@
 import psycopg2
 from nicegui import ui
+from reportlab.pdfgen import canvas
+from datetime import datetime
+from pathlib import Path
 
 ui.add_head_html('''
     <style>
@@ -17,6 +20,7 @@ event_labels = []
 event_table_keys = ['earthquake', 'conventional_explosion', 'nuclear_like']
 event_table_titles = ['earthquake', 'conventional explosion', 'nuclear like']
 
+chart=None
 
 def get_connection():
     return psycopg2.connect(
@@ -74,6 +78,19 @@ def fetch_measurements():
         {'sensor_id': r[0], 'sensor_value': r[1], 'timestamp': r[2]} for r in rows
     ]
 
+async def export_png():
+    data_url = await chart.run_chart_method('getDataURL', {'type': 'png'})
+
+    downloads = Path.home() / "Downloads"
+    filename = downloads / f"chart_{datetime.now().strftime('%Y%m%d_%H%M%S')}.png"
+
+    img_data = data_url.split(',')[1]
+
+    import base64
+    with open(filename, "wb") as f:
+        f.write(base64.b64decode(img_data))
+
+    ui.notify("PNG salvato in Downloads ✅")
 
 def open_realtime_measurements():
     all_measurements = fetch_measurements()
@@ -90,48 +107,74 @@ def open_realtime_measurements():
 
     def open_chart_dialog():
         with ui.dialog() as chart_dialog:
-            with ui.card().classes('w-screen h-screen max-w-full max-h-full p-4'):
-                
+            with ui.card().classes('w-screen h-screen max-w-full max-h-full p-6 bg-slate-900'):
+
                 # HEADER
-                with ui.row().classes('items-center justify-between mb-4'):
-                    ui.label('Realtime Chart').classes('text-2xl font-bold text-white')
-                    ui.button('Close', on_click=chart_dialog.close).props('icon=close color=negative')
+                with ui.row().classes('items-center justify-between w-full mb-6'):
+                    ui.label(f'Realtime Sensor: {realtime_sensor_select.value}')\
+                        .classes('text-3xl font-bold text-white')
+                    ui.button('Export PNG', on_click=export_png).props('icon=image flat dense').classes('text-blue-300 hover:text-blue-200')
+                    ui.space()
+                    ui.button(on_click=chart_dialog.close)\
+                        .props('icon=close flat round dense').classes('text-gray-400 hover:text-red-400')
 
-                # GRAFICO
-                chart = ui.echart({
-                    'xAxis': {'type': 'category', 'data': []},
-                    'yAxis': {'type': 'value'},
-                    'series': [{
-                        'data': [],
-                        'type': 'line',
-                        'smooth': True
-                    }]
-                }).classes('w-full h-full')
+                # CARD GRAFICO
+                with ui.card().classes('w-full h-full bg-slate-800 shadow-2xl rounded-2xl p-4'):
+                    global  chart
+                    
+                    chart = ui.echart({
+                        'backgroundColor': 'transparent',
 
-                # UPDATE REALTIME
-                def update_chart():
-                    rows = get_realtime_rows()
+                        'tooltip': {
+                            'trigger': 'axis'
+                        },
 
-                    if realtime_sensor_select.value != 'All sensors':
-                        last_points = rows[:50][::-1]
+                        'xAxis': {
+                            'type': 'category',
+                            'data': [],
+                            'axisLabel': {'color': '#cbd5f5'}
+                        },
 
-                        x = [r['timestamp'].strftime('%H:%M:%S') for r in last_points]
-                        y = [r['sensor_value'] for r in last_points]
+                        'yAxis': {
+                            'type': 'value',
+                            'axisLabel': {'color': '#cbd5f5'}
+                        },
 
-                        chart.options['xAxis']['data'] = x
-                        chart.options['series'][0]['data'] = y
+                        'series': [{
+                            'data': [],
+                            'type': 'line',
+                            'smooth': True,
+                            'lineStyle': {
+                                'width': 3
+                            },
+                            'areaStyle': {}  # effetto riempimento 🔥
+                        }]
+                    }).classes('w-full h-[80vh]')
 
-                        chart.update()
+                    def update_chart():
+                        rows = get_realtime_rows()
 
-                ui.timer(1.0, update_chart)
+                        if realtime_sensor_select.value != 'All sensors':
+                            last_points = rows[:50][::-1]
+
+                            x = [r['timestamp'].strftime('%H:%M:%S') for r in last_points]
+                            y = [r['sensor_value'] for r in last_points]
+
+                            chart.options['xAxis']['data'] = x
+                            chart.options['series'][0]['data'] = y
+
+                            chart.update()
+
+                    ui.timer(1.0, update_chart)
 
         chart_dialog.open()
 
     with ui.dialog() as dialog:
         with ui.card().classes('w-screen h-screen max-w-full max-h-full p-4'):
-            with ui.row().classes('items-center justify-between mb-4'):
-                ui.markdown('## REAL TIME Measurements').classes('text-2xl font-bold text-white m-0')
-                ui.button('Close', on_click=dialog.close).props('icon=close color=negative')
+            with ui.row().classes('items-center justify-between w-full mb-4'):
+                ui.markdown('## REAL TIME Measurements').classes('text-2xl font-bold text-black m-0')
+                ui.space()
+                ui.button(on_click=dialog.close).props('icon=close flat round dense').classes('text-gray-400 hover:text-red-400')
             with ui.row().classes('items-center gap-4 mb-4'):
                 realtime_sensor_select = ui.select(sensor_options, label='Filter sensor', value='All sensors').classes('w-56')
                 show_chart_button = ui.button('Mostra grafico', on_click=open_chart_dialog).classes('rounded-lg px-4 py-2 bg-gray-600 text-white')
@@ -190,7 +233,7 @@ def load_data():
 with ui.card().classes('w-full max-w-6xl mx-auto p-4 shadow-lg'):
     with ui.row().classes('items-center mb-3 gap-4'):
         ui.markdown('## Recent Events').classes('mb-0')
-        ui.button('REAL TIME', on_click=open_realtime_measurements).classes('rounded-lg px-30 py-10 bg-blue-600 text-3xl ml-55')
+        ui.button('PRESS TO WATCH REAL TIME MEASUREMENTS', on_click=open_realtime_measurements).props('flat no-caps').classes('rounded-3xl px-30 py-10 bg-slate-900 text-white text-xl font-semibold shadow-xl hover:bg-slate-700 hover:shadow-blue-500/30 transition-all duration-300 ml-35')
 
     sensor_options = ['All sensors'] + [f'sensor-{i:02d}' for i in range(1, 13)]
     with ui.row().classes('items-center gap-3 flex-wrap mb-4'):
@@ -203,9 +246,10 @@ with ui.card().classes('w-full max-w-6xl mx-auto p-4 shadow-lg'):
     with ui.row().classes('gap-4 w-full flex-nowrap'):
         for index in range(3):
             with ui.card().classes('flex-1 min-w-0 p-2'):
-                with ui.row().classes('items-center justify-between mb-2'):
+                with ui.row().classes('items-center justify-between w-full mb-2'):
                     event_labels.append(ui.label(event_table_titles[index]).classes('text-sm font-semibold'))
-                    ui.button('', on_click=load_data).props('icon=refresh color=primary round').classes('w-6 h-6 text-xs')
+                    ui.space()
+                    ui.button('', on_click=load_data).props('icon=refresh flat round dense size=sm').classes('w-4 h-4 text-xs')
                 
                 table = ui.table(
                     columns=[
@@ -220,10 +264,17 @@ with ui.card().classes('w-full max-w-6xl mx-auto p-4 shadow-lg'):
                 def open_fullscreen_table(idx=index):
                     with ui.dialog() as dialog:
                         with ui.card().classes('w-full max-w-6xl p-4'):
-                            with ui.row().classes('items-center justify-between mb-4'):
-                                ui.label(event_table_titles[idx]).classes('text-2xl font-bold text-white')
-                                ui.button('Close', on_click=dialog.close).props('icon=close color=negative')
-                            
+                            with ui.row().classes('items-center justify-between w-full mb-4'):
+                                ui.label(event_table_titles[idx]).classes('text-2xl font-bold text-black')
+
+                                with ui.row().classes('items-center gap-2'):
+                                    ui.button(on_click=load_data)\
+                                        .props('icon=refresh flat round dense size=sm')\
+                                        .classes('text-gray-400 hover:text-blue-400')
+
+                                    ui.button(on_click=dialog.close)\
+                                        .props('icon=close flat round dense size=sm')\
+                                        .classes('text-gray-400 hover:text-red-400')
                             ui.table(
                                 columns=[
                                     {'name': 'sensor', 'label': 'Sensor', 'field': 'sensor', 'sortable': True},

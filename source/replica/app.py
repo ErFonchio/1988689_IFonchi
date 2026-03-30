@@ -65,6 +65,9 @@ class SlaveClient:
         while True:
             data = self.sock.recv(4096)
 
+            if not data:
+                break 
+
             # Check if the master is electing me as leader
             if data == LEADER:
                 self.leader = True
@@ -72,14 +75,10 @@ class SlaveClient:
                 # read measurements
                 measures = json.loads(data.decode())
 
-            if self.count % 20 == 0:
-                logger.info(f"Received data: {measures}")
+                if self.count % 20 == 0:
+                    logger.info(f"Received data: {measures}")
 
             self.count += 1
-            
-            if not data:
-                break 
-
             # send ACK 
             self.sock.sendall(ACK)
         try:

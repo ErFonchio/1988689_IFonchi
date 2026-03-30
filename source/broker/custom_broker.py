@@ -99,6 +99,8 @@ class Master:
         self.slaves: list[SlaveConnection] = []
         self.slaves_lock = threading.Lock()
 
+        self.election_lock = threading.Lock()
+
         # just for handling printing
         self.count = 1
 
@@ -155,37 +157,38 @@ class Master:
         If this is not the case we elect a new leader scanning the list of active slaves
         '''
 
-        #leader_elected = False
-        with self.slaves_lock:
-            # Retrieve active slaves
-            active_slaves = [s for s in self.slaves if s.alive]
-#
-        #    # Check if there is an alive leader
-        #    for s in active_slaves:
-        #        if s.leader:
-        #            leader_elected = True 
-        #            break 
-#
-        #if not leader_elected:
-        #    attempts = 3
-        #    if len(active_slaves) > 0:
-        #        # elect as leader the first slave in the list
-        #        for _ in attempts:
-        #            elected = False
-        #            for s in active_slaves:
-        #                # communicate to the slave that he is the new leader
-        #                if s.send_and_ack(LEADER):
-        #                    s.leader = True
-        #                    logger.info(f"Elected leader slave {s.slave_id}") 
-        #                    elected = True
-        #                    break
-        #                else:
-        #                    logger.warning(f"Something went wrong when tried to elect a new leader")
-        #            
-        #            # If successfully elected new leader exit
-        #            if elected:
-        #                break
-#
+        with self.election_lock:
+            leader_elected = False
+            with self.slaves_lock:
+                # Retrieve active slaves
+                active_slaves = [s for s in self.slaves if s.alive]
+
+                # Check if there is an alive leader
+                for s in active_slaves:
+                    if s.leader:
+                        leader_elected = True 
+                        break 
+
+            if not leader_elected:
+                attempts = 3
+                if len(active_slaves) > 0:
+                    # elect as leader the first slave in the list
+                    for _ in range(attempts):
+                        elected = False
+                        for s in active_slaves:
+                            # communicate to the slave that he is the new leader
+                            if s.send_and_ack(LEADER):
+                                s.leader = True
+                                logger.info(f"Elected leader slave {s.slave_id}") 
+                                elected = True
+                                break
+                            else:
+                                logger.warning(f"Something went wrong when tried to elect a new leader")
+                        
+                        # If successfully elected new leader exit
+                        if elected:
+                            break
+
 
         # broadcast data to active slaves
         def send(slave: SlaveConnection):
@@ -249,6 +252,8 @@ async def get_measures(sensor_id, master: Master):
                 try:
                     # 1. Ricevi la misurazione dal simulatore (JSON)
                     measurement = await websocket.recv()
+
+                    #print(f"MEASUREMENT: {measurement}\n")
 
                     # transform the json file in a python dictiorary
                     data = json.loads(measurement)

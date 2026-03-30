@@ -10,8 +10,8 @@ from collections import deque
 import time
 import numpy as np
 from datetime import datetime
-import numpy as np
-from datetime import datetime
+import psycopg2
+from psycopg2.extras import RealDictCursor
 
 app = Flask(__name__)
 logging.basicConfig(level=logging.INFO)
@@ -25,13 +25,20 @@ UPSTREAM_URL = f"http://{SIMULATOR_HOST}:8080/api/control"
 BROKER_HOST = os.getenv('BROKER_HOST', 'localhost')
 BROKER_PORT = int(os.getenv('BROKER_PORT', 5001))
 
+# Configurazione database PostgreSQL
+DB_HOST = os.getenv('DB_HOST', 'postgres')
+DB_PORT = int(os.getenv('DB_PORT', 5432))
+DB_USER = os.getenv('DB_USER', 'postgres')
+DB_PASSWORD = os.getenv('DB_PASSWORD', 'fonchi4ever')
+DB_NAME = os.getenv('DB_NAME', 'FonchiDB')
+
 # Coda per bufferizzare i dati SSE
 sse_queue = Queue(maxsize=100)
 stream_thread = None
 stream_connected = False
 
 # Sliding window automatica - mantiene solo gli ultimi n elementi
-window_length = 1200
+window_length = 2400
 data_window = deque(maxlen=window_length)
 
 # ACK constant per broker communication
@@ -93,11 +100,12 @@ class SlaveClient:
             
                 if (self.leader == True) and (self.count % window_length) == 0:
                     logger.info(f"entering frequency analysis")
-                    frequency_analysis(data_window)
-
-                    '''invio dell'analisi delle frequenze a database + frontend'''
-
-            # send ACK 
+                    results = frequency_analysis(data_window)
+                    
+                    # Salva i risultati nel database
+                    if results:
+                        save_results_to_db(results)
+                    
             self.sock.sendall(ACK)
         try:
             if self.sock:
@@ -167,6 +175,64 @@ def get_stream_from_queue():
         except:
             # Timeout dalla coda - invia heartbeat
             yield ":\n\n"
+
+def save_results_to_db(results):
+    """Salva i risultati dell'analisi nel database PostgreSQL"""
+    if not results:
+        logger.warning("Results vuoti, non salvo nel database")
+        return
+    
+    try:
+        # Connessione al database
+        conn = psycopg2.connect(
+            host=DB_HOST,
+            port=DB_PORT,
+            user=DB_USER,
+            password=DB_PASSWORD,
+            database=DB_NAME
+        )
+        cur = conn.cursor()
+        
+        logging.info(f"sei connesso bro")
+        # Inserisci ogni risultato nella tabella events
+        for sensor_id, data in results.items():
+            
+            try:
+                query = """
+                    INSERT INTO events (sensor_id, event_type, startstamp, endstamp, frequency)
+                    VALUES (%s, %s, %s, %s, %s)
+                    ON CONFLICT (sensor_id, startstamp, endstamp) DO NOTHING
+                """
+                
+                cur.execute(query, (
+                    str(sensor_id),
+                    str(data['event_type']),
+                    str(data['interval_start']),
+                    str(data['interval_end']),
+                    str(data['dominant_frequency'])
+                ))
+                
+                logger.info(f"✓ Salvato nel DB: {sensor_id} - {data['event_type']} ({data['dominant_frequency']:.2f} Hz)")
+            
+            except Exception as e:
+                logger.error(f"Errore nel salvataggio di {sensor_id}: {e}")
+                conn.rollback()
+                continue
+        
+        conn.commit()
+        logger.info(f"✓ {len([r for r in results.values() if 'error' not in r])} record salvati nel database")
+        
+    except psycopg2.OperationalError as e:
+        logger.error(f"Errore connessione PostgreSQL: {e}")
+        logger.warning("Database non disponibile, risultati non salvati")
+    except Exception as e:
+        logger.error(f"Errore nel salvataggio nel DB: {e}")
+    finally:
+        try:
+            cur.close()
+            conn.close()
+        except:
+            pass
 
 def frequency_analysis(data_window):
     '''Analizza frequenze per ogni ID sensore'''

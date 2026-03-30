@@ -4,10 +4,14 @@ import threading
 import logging
 import os
 import json
-import sys
 import socket
 from queue import Queue
+from collections import deque
 import time
+import numpy as np
+from datetime import datetime
+import numpy as np
+from datetime import datetime
 
 app = Flask(__name__)
 logging.basicConfig(level=logging.INFO)
@@ -25,6 +29,10 @@ BROKER_PORT = int(os.getenv('BROKER_PORT', 5001))
 sse_queue = Queue(maxsize=100)
 stream_thread = None
 stream_connected = False
+
+# Sliding window automatica - mantiene solo gli ultimi 100 elementi
+# Quando aggiungi il 101°, il primo viene scartato automaticamente
+data_window = deque(maxlen=1000)
 
 # ACK constant per broker communication
 ACK = b"ACK"
@@ -62,9 +70,13 @@ class SlaveClient:
         while True:
             data = self.sock.recv(4096)
             measures = json.loads(data.decode())
-            
-            if self.count % 20 == 0:
+
+            # adding elemnets elements to sliding window
+            data_window.append(measures)
+
+            if self.count % 200 == 0:
                 logger.info(f"Received data: {measures}")
+                frequency_analysis()
 
             self.count += 1
             
@@ -141,6 +153,62 @@ def get_stream_from_queue():
         except:
             # Timeout dalla coda - invia heartbeat
             yield ":\n\n"
+
+def frequency_analysis():
+    '''analyse dequeue'''
+    
+    if len(data_window) < 2:
+        logger.warning("Non abbastanza dati per l'analisi")
+        return None
+    
+    try:
+        # 1. Estrai timestamp e valori
+        timestamps = []
+        values = []
+        
+        for sample in data_window:
+            data = json.loads(sample) if isinstance(sample, str) else sample
+            timestamps.append(datetime.fromisoformat(data['timestamp']))
+            values.append(float(data['value']))
+        
+        # Verifica ordine temporale
+        time_ordered = all(timestamps[i] <= timestamps[i+1] for i in range(len(timestamps)-1))
+        logger.info(f"Ordine temporale: {'✓ OK' if time_ordered else '✗ VIOLATO'}")
+
+        # Verifica l'unicità dei sample
+        # set_len = len(list(set(timestamps)))
+        # list_len = len(timestamps)
+        # time_set = set_len == list_len
+        # logger.info(f"Unicità dei sample: {'✓ OK' if time_set else '✗ VIOLATO', set_len}")
+
+        
+        # Calcola intervallo temporale medio (sample rate)
+        time_diffs = [(timestamps[i+1] - timestamps[i]).total_seconds() 
+                      for i in range(len(timestamps)-1)]
+        avg_dt = np.mean(time_diffs)
+        sample_rate = 1 / avg_dt if avg_dt > 0 else 1
+        
+        # 4. FFT per trovare frequenza dominante
+        fft_values = np.fft.fft(values)
+        freqs = np.fft.fftfreq(len(values), avg_dt)
+        power = np.abs(fft_values) ** 2
+        
+        # Prendi solo frequenze positive
+        idx = np.where(freqs > 0)[0]
+        dominant_freq = freqs[idx][np.argmax(power[idx])]
+        
+        return {
+            'temporal_order_ok': time_ordered,
+            'sample_count': len(data_window),
+            'sample_rate': sample_rate,
+            'dominant_frequency': dominant_freq,
+            'avg_time_interval': avg_dt
+        }
+        
+    except Exception as e:
+        logger.error(f"Errore nell'analisi: {e}")
+        return None
+
 
 
 def connect_to_broker():

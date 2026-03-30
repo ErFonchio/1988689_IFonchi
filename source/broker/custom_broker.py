@@ -173,7 +173,7 @@ class Master:
             s.close()
 
         success = sum(1 for ok in results.values() if ok)
-        logger.info(f"Broadcast: {success}/{len(results)} slaves ACKed")
+        #logger.info(f"Broadcast: {success}/{len(results)} slaves ACKed")
         return results
     
     def run(self, data_source):
@@ -203,33 +203,8 @@ async def get_measures(sensor_id, master: Master):
                 try:
                     # 1. Ricevi la misurazione dal simulatore (JSON)
                     measurement = await websocket.recv()
-                    
-                    # 2. Converti in bytes per il broadcast (il master.broadcast() invia bytes)
-                    #measurement_bytes = measurement.encode() if isinstance(measurement, str) else measurement
-
-                    # measurement_bytes = json.loads(measurement).encode() if isinstance(measurement, str) else measurement
-                    
-                    # 3. Invia la misurazione a TUTTE le repliche connesse
-                    # master.broadcast() fa:
-                    #   - Invia il dato a tutte le slave connection attive
-                    #   - Aspetta l'ACK da ogni replica
-                    #   - Rimuove le repliche che non rispondono (morte)
-
-                    '''GIOOOOO GUARDA QUI
-
-                    - quando faccio partire la funzione di broadcast succedono dei casini
-                    - lo lascio per te :)
-                    
-                    # results = master.broadcast(measurement_bytes)
-                    
-                    # # Log del risultato
-                    # if results:
-                    #     logger.debug(f"Sensore {sensor_id}: {len([r for r in results.values() if r])}/{len(results)} repliche ACKed")
-                    '''
-
                     data = json.dumps(json.loads(measurement)).encode()
                     master.broadcast(data)
-
 
                 except Exception as e:
                     logger.error(f"Errore ricevendo dal sensore {sensor_id}: {e}")

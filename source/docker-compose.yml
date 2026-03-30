@@ -20,6 +20,21 @@ services:
       - FLASK_ENV=production
       - SIMULATOR_HOST=simulator
 
+  frontend:
+    build: ./frontend
+    ports:
+      - "5030:8080"
+    networks:
+      - seismic-network
+    depends_on:
+      - simulator
+      - broker
+    environment:
+      - FLASK_ENV=production
+      - BROKER_HOST=broker
+      - BROKER_PORT=5001
+  
+
   replica0:
     build: ./replica
     ports:
@@ -103,6 +118,7 @@ services:
       - "5432:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
+      - ./db/database.sql:/docker-entrypoint-initdb.d/init.sql
       - ./db/database.sql:/docker-entrypoint-initdb.d/init.sql
     networks:
       - seismic-network

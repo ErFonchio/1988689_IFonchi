@@ -35,6 +35,9 @@ class SlaveClient:
         self.sock = None
         self.max_retries = max_retries
         self._connect(master_host, master_port)
+
+        ## Just for printing
+        self.count = 0
     
     def _connect(self, master_host: str, master_port: int):
         """Prova a connettersi con retry"""
@@ -53,28 +56,54 @@ class SlaveClient:
         
         raise Exception(f"Impossibile connettersi a {master_host}:{master_port} dopo {self.max_retries} tentativi")
 
-    def send_data(self, data: str):
-        """Invia dati al master e aspetta ACK"""
-        try:
-            self.sock.sendall(data.encode() + b"\n")
-            ack = self.sock.recv(len(ACK))
-            if ack == ACK:
-                logger.debug("ACK ricevuto dal broker")
-                return True
-            else:
-                logger.warning(f"ACK invalido dal broker: {ack}")
-                return False
-        except Exception as e:
-            logger.error(f"Errore invio dati: {e}")
-            return False
 
-    def close(self):
-        """Chiude la connessione"""
+    def run(self):
+        # get data from broker, and send ack
+        while True:
+            data = self.sock.recv(4096)
+            measures = json.loads(data.decode())
+            
+            if self.count % 20 == 0:
+                logger.info(f"Received data: {measures}")
+
+            self.count += 1
+            
+            if not data:
+                break 
+
+            # send ACK 
+            self.sock.sendall(ACK)
         try:
             if self.sock:
                 self.sock.close()
         except:
             pass
+
+
+            
+
+    #def send_data(self, data: str):
+    #    """Invia dati al master e aspetta ACK"""
+    #    try:
+    #        self.sock.sendall(data.encode() + b"\n")
+    #        ack = self.sock.recv(len(ACK))
+    #        if ack == ACK:
+    #            logger.debug("ACK ricevuto dal broker")
+    #            return True
+    #        else:
+    #            logger.warning(f"ACK invalido dal broker: {ack}")
+    #            return False
+    #    except Exception as e:
+    #        logger.error(f"Errore invio dati: {e}")
+    #        return False
+
+    # def close(self):
+    #     """Chiude la connessione"""
+    #     try:
+    #         if self.sock:
+    #             self.sock.close()
+    #     except:
+    #         pass
 
 
 def connect_to_upstream():
@@ -146,42 +175,48 @@ def get_stream_from_queue():
 def connect_to_broker():
     """Thread che rimane connesso al broker e invia i dati usando SlaveClient"""
     
-    while True:
-        try:
-            logger.info(f"Connessione al broker {BROKER_HOST}:{BROKER_PORT}")
-            slave = SlaveClient(BROKER_HOST, BROKER_PORT)
+    try:
+        logger.info(f"Connessione al broker {BROKER_HOST}:{BROKER_PORT}")
+        slave = SlaveClient(BROKER_HOST, BROKER_PORT)
+
+        # Start receiving data from the custom broker
+        slave.run()
+
+    except Exception as e:
+        logger.error(f"Error while communicating with broker: {e}")
             
-            while True:
-                # Leggi dalla coda SSE e invia al broker
-                try:
-                    data = sse_queue.get(timeout=5)
-                    # Rimuovi prefisso SSE e invia il JSON puro
-                    line = data.replace("data: ", "").replace("\n\n", "").strip()
+            #while True:
+            #    # Leggi dalla coda SSE e invia al broker
+            #    try:
+            #        #measures = sock.recv(4096)
+            #        data = sse_queue.get(timeout=5)
+            #        # Rimuovi prefisso SSE e invia il JSON puro
+            #        line = data.replace("data: ", "").replace("\n\n", "").strip()
+            #        
+            #        if line and line != ":":  # Ignora heartbeat
+            #            logger.debug(f"Inviando al broker: {line}")
+            #            if not slave.send_data(line):
+            #                # Errore invio, riconnetti
+            #                break
+            #                
+            #    except socket.timeout:
+            #        logger.debug("Timeout in attesa di dati dalla coda")
+            #        continue
+            #    except Exception as e:
+            #        logger.error(f"Errore in slave client: {e}")
+            #        break
                     
-                    if line and line != ":":  # Ignora heartbeat
-                        logger.debug(f"Inviando al broker: {line}")
-                        if not slave.send_data(line):
-                            # Errore invio, riconnetti
-                            break
-                            
-                except socket.timeout:
-                    logger.debug("Timeout in attesa di dati dalla coda")
-                    continue
-                except Exception as e:
-                    logger.error(f"Errore in slave client: {e}")
-                    break
-                    
-        except ConnectionRefusedError:
-            logger.error(f"Broker non raggiungibile ({BROKER_HOST}:{BROKER_PORT}), riprovo...")
-            time.sleep(5)
-        except Exception as e:
-            logger.error(f"Errore connessione broker: {e}")
-            time.sleep(5)
-        finally:
-            try:
-                slave.close()
-            except:
-                pass
+        #except ConnectionRefusedError:
+        #    logger.error(f"Broker non raggiungibile ({BROKER_HOST}:{BROKER_PORT}), riprovo...")
+        #    time.sleep(5)
+        #except Exception as e:
+        #    logger.error(f"Errore connessione broker: {e}")
+        #    time.sleep(5)
+        #finally:
+        #    try:
+        #        slave.close()
+        #    except:
+        #        pass
 
 
 @app.route('/api/control', methods=['GET'])

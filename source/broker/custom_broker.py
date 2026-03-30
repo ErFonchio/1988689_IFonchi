@@ -67,7 +67,7 @@ class SlaveConnection:
             try:
                 self.conn.sendall(data)
                 self.conn.settimeout(ACK_TIMEOUT)   # wiat 5s for the ack
-                ack = self.conn.recv(len(ACK))  # len(ACK) buffer size
+                ack = self.conn.recv(len(ACK))      # len(ACK) buffer size
                 if ack == ACK:
                     return True 
                 
@@ -148,21 +148,25 @@ class Master:
 
         # broadcast data to active slaves
         def send(slave: SlaveConnection):
-            results[slave.slave_id] = slave.send_and_ack(data)
+            try:
+                results[slave.slave_id] = slave.send_and_ack(data)
+            except Exception as e:
+                logger.warning(f"Error with slave {slave.slave_id}: {e}") # slaves crush while receiving data
+                slave.alive = False     # mark slave as dead
+                results[slave.slave_id] = False
 
         for slave in active_slaves:
             t = threading.Thread(target=send, args=(slave,), daemon=True)
             threads.append(t)
             t.start()
 
+        # wait for threads to complete
         for t in threads:
             t.join()
 
         with self.slaves_lock:
             crushed = [s for s in active_slaves if not s.alive]
-            
-            # update slaves
-            self.slaves = [s for s in self.slaves if s.alive]
+            self.slaves = [s for s in self.slaves if s.alive]   # update slaves
 
         for s in crushed:
             logger.warning(f"Removing crushed slave {s.slave_id}")
@@ -172,9 +176,9 @@ class Master:
         logger.info(f"Broadcast: {success}/{len(results)} slaves ACKed")
         return results
     
-    # def run(self, data_source):
-    #     threading.Thread(target=self.accept_connection, daemon=True).start()
-    #     self.broadcast(data_source)
+    def run(self, data_source):
+        threading.Thread(target=self.accept_connection, daemon=True).start()
+        self.broadcast(data_source)
 
 ### Get measurement data from sensors
 
@@ -201,7 +205,9 @@ async def get_measures(sensor_id, master: Master):
                     measurement = await websocket.recv()
                     
                     # 2. Converti in bytes per il broadcast (il master.broadcast() invia bytes)
-                    measurement_bytes = measurement.encode() if isinstance(measurement, str) else measurement
+                    #measurement_bytes = measurement.encode() if isinstance(measurement, str) else measurement
+
+                    # measurement_bytes = json.loads(measurement).encode() if isinstance(measurement, str) else measurement
                     
                     # 3. Invia la misurazione a TUTTE le repliche connesse
                     # master.broadcast() fa:
@@ -220,6 +226,9 @@ async def get_measures(sensor_id, master: Master):
                     # if results:
                     #     logger.debug(f"Sensore {sensor_id}: {len([r for r in results.values() if r])}/{len(results)} repliche ACKed")
                     '''
+
+                    data = json.dumps(json.loads(measurement)).encode()
+                    master.broadcast(data)
 
 
                 except Exception as e:

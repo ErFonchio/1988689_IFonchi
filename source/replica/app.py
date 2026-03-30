@@ -75,26 +75,23 @@ class SlaveClient:
 
             if not data:
                 break 
-
+            
             # Check if the master is electing me as leader
             if data == LEADER:
-                    self.leader = True
-            measures = json.loads(data.decode())
+                self.leader = True
+            else:
 
-            # adding elemnets elements to sliding window
-            data_window.append(measures)
+                measures = json.loads(data.decode())
+                data_window.append(measures)
+                self.count += 1
 
-            if (self.count % 200) == 0:
-                logger.info(f"Received data: {measures}")
+                if (self.count % 200) == 0:
+                    logger.info(f"Received data: {measures}")
             
-            '''da implementare quando sarà disponibile'''
-            # if self.leader:
-            #     frequency_analysis()
-            if (self.count % window_length) == 0:
-                logger.info(f"entering frequency analysis")
-                frequency_analysis(data_window)
+                if (self.leader == True) and (self.count % window_length) == 0:
+                    logger.info(f"entering frequency analysis")
+                    frequency_analysis(data_window)
 
-            self.count += 1
             # send ACK 
             self.sock.sendall(ACK)
         try:

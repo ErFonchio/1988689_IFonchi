@@ -80,32 +80,6 @@ class SlaveClient:
             pass
 
 
-            
-
-    #def send_data(self, data: str):
-    #    """Invia dati al master e aspetta ACK"""
-    #    try:
-    #        self.sock.sendall(data.encode() + b"\n")
-    #        ack = self.sock.recv(len(ACK))
-    #        if ack == ACK:
-    #            logger.debug("ACK ricevuto dal broker")
-    #            return True
-    #        else:
-    #            logger.warning(f"ACK invalido dal broker: {ack}")
-    #            return False
-    #    except Exception as e:
-    #        logger.error(f"Errore invio dati: {e}")
-    #        return False
-
-    # def close(self):
-    #     """Chiude la connessione"""
-    #     try:
-    #         if self.sock:
-    #             self.sock.close()
-    #     except:
-    #         pass
-
-
 def connect_to_upstream():
     """Thread che rimane connesso al flusso SSE del simulatore"""
     global stream_connected
@@ -113,8 +87,6 @@ def connect_to_upstream():
     while True:
         try:
             logger.info(f"Connessione a {UPSTREAM_URL}")
-            # timeout=(connect_timeout, read_timeout)
-            # read_timeout=None = aspetta indefinitamente i dati
             response = requests.get(UPSTREAM_URL, stream=True, timeout=(5, None))
             response.raise_for_status()
             
@@ -160,7 +132,6 @@ def connect_to_upstream():
             sse_queue.put(f"data: {{'error': '{str(e)}'}}\n\n")
             time.sleep(5)
 
-
 def get_stream_from_queue():
     """Generator che legge dalla coda e trasmette ai client"""
     while True:
@@ -184,39 +155,6 @@ def connect_to_broker():
 
     except Exception as e:
         logger.error(f"Error while communicating with broker: {e}")
-            
-            #while True:
-            #    # Leggi dalla coda SSE e invia al broker
-            #    try:
-            #        #measures = sock.recv(4096)
-            #        data = sse_queue.get(timeout=5)
-            #        # Rimuovi prefisso SSE e invia il JSON puro
-            #        line = data.replace("data: ", "").replace("\n\n", "").strip()
-            #        
-            #        if line and line != ":":  # Ignora heartbeat
-            #            logger.debug(f"Inviando al broker: {line}")
-            #            if not slave.send_data(line):
-            #                # Errore invio, riconnetti
-            #                break
-            #                
-            #    except socket.timeout:
-            #        logger.debug("Timeout in attesa di dati dalla coda")
-            #        continue
-            #    except Exception as e:
-            #        logger.error(f"Errore in slave client: {e}")
-            #        break
-                    
-        #except ConnectionRefusedError:
-        #    logger.error(f"Broker non raggiungibile ({BROKER_HOST}:{BROKER_PORT}), riprovo...")
-        #    time.sleep(5)
-        #except Exception as e:
-        #    logger.error(f"Errore connessione broker: {e}")
-        #    time.sleep(5)
-        #finally:
-        #    try:
-        #        slave.close()
-        #    except:
-        #        pass
 
 
 @app.route('/api/control', methods=['GET'])

@@ -14,7 +14,7 @@ logger = logging.getLogger(__name__)
 
 ### ENVIRONMENTS VARIABLES  
 BROKER_HOST = os.getenv('BROKER_HOST', 'localhost')
-BROKER_PORT = int(os.getenv('BROKER_PORT', 5001))
+BROKER_PORT = int(os.getenv('BROKER_PORT', 5000))
 
 DB_HOST = os.getenv('DB_HOST', 'postgres')
 DB_PORT = int(os.getenv('DB_PORT', 5432))
@@ -42,109 +42,129 @@ chart=None
 live_data = []   
 
 def get_connection():
-    return psycopg2.connect(
-        host=DB_HOST,
-        database="FonchiDB",
-        user="postgres",
-        password="fonchi4ever",
-        port=DB_PORT
-    )
+    try:
+        logger.info(f"Connessione al DB: {DB_HOST}:{DB_PORT} (FonchiDB)")
+        conn = psycopg2.connect(
+            host=DB_HOST,
+            database="FonchiDB",
+            user="postgres",
+            password="fonchi4ever",
+            port=DB_PORT
+        )
+        logger.info("✓ Connessione al database riuscita")
+        return conn
+    except Exception as e:
+        logger.error(f"✗ Errore connessione DB: {e}")
+        raise
 
 def fetch_events():
-    conn = get_connection()
-    cur = conn.cursor()
+    try:
+        logger.info("Fetching events dal database...")
+        conn = get_connection()
+        cur = conn.cursor()
 
-    cur.execute("""
-        SELECT sensor_id, event_type, startstamp, endstamp, frequency 
-        FROM events
-        ORDER BY startstamp DESC
-    """)
+        cur.execute("""
+            SELECT sensor_id, event_type, frequency, startstamp, endstamp
+            FROM events
+            WHERE event_type IN ('earthquake', 'conventional_explosion', 'nuclear_like')
+            ORDER BY startstamp DESC
+        """)
 
-    rows = cur.fetchall()
+        rows = cur.fetchall()
+        logger.info(f"✓ Recuperati {len(rows)} eventi dal database")
+        
+        if rows:
+            logger.debug(f"Primo record: {rows[0]}")
+            logger.debug(f"Ultimo record: {rows[-1]}")
 
-    conn.close()
-
-    return rows
+        conn.close()
+        return rows
+    except Exception as e:
+        logger.error(f"✗ Errore fetching events: {e}")
+        return []
 
 
 def apply_filters():
+    logger.info("Applicando filtri...")
     sensor_query = ''
     if sensor_filter.value and sensor_filter.value != 'All sensors':
         sensor_query = sensor_filter.value.lower().strip()
+        logger.info(f"Filtro sensore attivo: {sensor_query}")
+    else:
+        logger.info("Nessun filtro sensore")
 
     filtered = [
         row for row in all_rows
         if not sensor_query or sensor_query in str(row['sensor']).lower()
     ]
+    logger.info(f"✓ Filtrati {len(filtered)} su {len(all_rows)} record")
 
     grouped = {}
     for row in filtered:
         grouped.setdefault(row['type'], []).append(row)
 
+    logger.info(f"Raggruppamento per tipo:")
+    for event_type, items in grouped.items():
+        logger.info(f"  - {event_type}: {len(items)} record")
+
     for index in range(3):
         event_key = event_table_keys[index]
+        event_count = len(grouped.get(event_key, []))
         event_labels[index].set_text(event_table_titles[index])
         event_tables[index].rows = grouped.get(event_key, [])
+        logger.debug(f"  Tabella '{event_table_titles[index]}' aggiornata con {event_count} righe")
 
 
 async def listen():
     global live_data
+    
+    max_retries = 10
+    retry_count = 0
 
-    while True:
+    while retry_count < max_retries:
         try:
+            logger.info(f"Tentativo di connessione al broker {retry_count + 1}/{max_retries}")
             async with websockets.connect(f"ws://{BROKER_HOST}:{BROKER_PORT}") as ws:
-                logging.info("FRONTEND connencted with BROKER")
+                logger.info("✓ FRONTEND connesso con BROKER")
+                message_count = 0
+
                 async for message in ws:
-                    data = json.loads(message)
+                    try:
+                        data = json.loads(message)
+                        message_count += 1
+                        
+                        # Verifica campi obbligatori
+                        required_fields = ['sensor_id', 'value', 'timestamp']
+                        if not all(field in data for field in required_fields):
+                            logger.warning(f"⚠️ Messaggio incompleto ricevuto: {list(data.keys())}")
+                            continue
+                        
+                        # normalizza formato
+                        new_row = {
+                            'sensor_id': data['sensor_id'],
+                            'sensor_value': data['value'],
+                            'timestamp': datetime.fromisoformat(data['timestamp'])
+                        }
 
-                    # normalizza formato
-                    new_row = {
-                        'sensor_id': data['sensor_id'],
-                        'sensor_value': data['value'],
-                        'timestamp': datetime.fromisoformat(data['timestamp'])
-                    }
-
-                    live_data.insert(0, new_row)
-
-        except (ConnectionRefusedError, OSError) as e:
-            logger.warning(f"Broker not ready, retrying in 3 seconds... ({e})")
-            await asyncio.sleep(3)
-
+                        live_data.insert(0, new_row)
+                        
+                        if message_count % 50 == 0:
+                            logger.info(f"✓ Ricevuti {message_count} messaggi dal broker, live_data size: {len(live_data)}")
+                            logger.info(f"Ricevute le repliche attive dal broker {data['active_replicas']}")
+                        
+                    except json.JSONDecodeError as e:
+                        logger.error(f"✗ Errore parsing JSON: {e}")
+                    except Exception as e:
+                        logger.error(f"✗ Errore elaborazione messaggio: {e}")
+        
         except Exception as e:
-            logger.error(f"Unexpected error: {e}")
-            await asyncio.sleep(3)
-
-#async def listen():
-#    global live_data
-#    
-#    max_retries = 10
-#    retry_count = 0
-#
-#    while retry_count < max_retries:
-#        try:
-#            logger.info(f"Tentativo di connessione al broker {retry_count + 1}/{max_retries}")
-#            async with websockets.connect(f"ws://{BROKER_HOST}:{BROKER_PORT}") as ws:
-#                logger.info("✓ FRONTEND connesso con BROKER")
-#                async for message in ws:
-#                    data = json.loads(message)
-#
-#                    # normalizza formato
-#                    new_row = {
-#                        'sensor_id': data['sensor_id'],
-#                        'sensor_value': data['value'],
-#                        'timestamp': datetime.fromisoformat(data['timestamp'])
-#                    }
-#
-#                    live_data.insert(0, new_row)
-#        
-#        except Exception as e:
-#            retry_count += 1
-#            logger.error(f"Errore connessione broker: {e}, tentativo {retry_count}/{max_retries}")
-#            if retry_count < max_retries:
-#                await asyncio.sleep(2)  # Attendi 2 secondi prima di retry
-#            else:
-#                logger.error("Impossibile connettersi al broker após 10 tentativi")
-
+            retry_count += 1
+            logger.error(f"✗ Errore connessione broker: {e}, tentativo {retry_count}/{max_retries}")
+            if retry_count < max_retries:
+                logger.info(f"Attesa 2 secondi prima di ritentare...")
+                await asyncio.sleep(2)  # Attendi 2 secondi prima di retry
+            else:
+                logger.error("✗ Impossibile connettersi al broker dopo 10 tentativi")
 
 async def export_png():
     data_url = await chart.run_chart_method('getDataURL', {'type': 'png'})
@@ -166,10 +186,8 @@ def open_realtime_measurements():
 
     def get_realtime_rows():
         rows = live_data
-
-    if realtime_sensor_select.value != 'All sensors':
-        rows = [r for r in rows if r['sensor_id'] == realtime_sensor_select.value]
-
+        if realtime_sensor_select.value != 'All sensors':
+            rows = [r for r in rows if r['sensor_id'] == realtime_sensor_select.value]
         return rows
 
     chart = None
@@ -226,7 +244,7 @@ def open_realtime_measurements():
 
                         if realtime_sensor_select.value != 'All sensors':
 
-                            last_points = rows[:20][::-1]   
+                            last_points = rows[:500][::-1]   
 
                             x = [r['timestamp'].strftime('%H:%M:%S') for r in last_points]
                             y = [r['sensor_value'] for r in last_points]
@@ -289,15 +307,30 @@ def open_realtime_measurements():
 
 def load_data():
     global all_rows
+    logger.info("Loading data dal database...")
     data = fetch_events()
     all_rows = []
+    
     for r in data:
         all_rows.append({
             'sensor': r[0],
             'type': r[1],
-            'timestamp': str(r[2]),
-            'frequency': r[3]
+            'frequency': r[2],
+            'startstamp': str(r[3]),
+            'endstamp': str(r[4]),
         })
+    
+    logger.info(f"✓ Caricati {len(all_rows)} record in all_rows")
+    
+    # Verifica il contenuto
+    if all_rows:
+        logger.debug(f"Primo record: {all_rows[0]}")
+        types_count = {}
+        for row in all_rows:
+            event_type = row['type']
+            types_count[event_type] = types_count.get(event_type, 0) + 1
+        logger.info(f"Distribuzione tipi evento: {types_count}")
+    
     apply_filters()
 
 
@@ -326,7 +359,8 @@ with ui.card().classes('w-full max-w-6xl mx-auto p-4 shadow-lg'):
                     columns=[
                         {'name': 'sensor', 'label': 'Sensor', 'field': 'sensor', 'sortable': True},
                         {'name': 'frequency', 'label': 'Frequency', 'field': 'frequency', 'sortable': True},
-                        {'name': 'timestamp', 'label': 'Timestamp', 'field': 'timestamp', 'sortable': True}
+                        {'name': 'startstamp', 'label': 'Startstamp', 'field': 'startstamp', 'sortable': True},
+                        {'name': 'endstamp', 'label': 'Endstamp', 'field': 'endstamp', 'sortable': True}
                     ],
                     rows=[],
                 ).classes('w-full cursor-pointer hover:opacity-75 transition-opacity')
@@ -350,7 +384,8 @@ with ui.card().classes('w-full max-w-6xl mx-auto p-4 shadow-lg'):
                                 columns=[
                                     {'name': 'sensor', 'label': 'Sensor', 'field': 'sensor', 'sortable': True},
                                     {'name': 'frequency', 'label': 'Frequency', 'field': 'frequency', 'sortable': True},
-                                    {'name': 'timestamp', 'label': 'Timestamp', 'field': 'timestamp', 'sortable': True}
+                                    {'name': 'startstamp', 'label': 'Startstamp', 'field': 'startstamp', 'sortable': True},
+                                    {'name': 'endstamp', 'label': 'Endstamp', 'field': 'endstamp', 'sortable': True}
                                 ],
                                 rows=event_tables[idx].rows,
                             ).classes('w-full')
@@ -362,5 +397,25 @@ with ui.card().classes('w-full max-w-6xl mx-auto p-4 shadow-lg'):
 
 load_data()
 
-app.on_startup(listen)
+# AUTO-REFRESH: Aggiorna le tabelle di evento ogni 5 secondi dal database
+def refresh_events():
+    logger.debug("🔄 Refresh automatico eventi dal database...")
+    load_data()
+
+ui.timer(5.0, refresh_events, once=False)
+logger.info("✓ Auto-refresh tabelle evento abilitato (ogni 5 secondi)")
+
+logger.info("="*60)
+logger.info("🚀 Fonchi Dashboard UI Inizializzato")
+logger.info(f"   DB: {DB_HOST}:{DB_PORT} (FonchiDB)")
+logger.info(f"   Broker: {BROKER_HOST}:{BROKER_PORT} (WebSocket)")
+logger.info(f"   Dashboard: http://localhost:5030")
+logger.info("="*60)
+
+# Avvia il listener in background con NiceGUI timer
+async def start_listening():
+    await listen()
+
+ui.timer(0.1, lambda: asyncio.create_task(start_listening()), once=True)
+
 ui.run()

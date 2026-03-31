@@ -35,7 +35,7 @@ services:
     environment:
       - FLASK_ENV=production
       - BROKER_HOST=broker
-      - BROKER_PORT=8765
+      - BROKER_PORT=5000
   
 
   replica0:
@@ -111,16 +111,16 @@ services:
 
   postgres:
     image: postgres:16
-    container_name: fonchi
     restart: always
     environment:
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: "fonchi4ever"
       POSTGRES_DB: FonchiDB
     ports:
-      - "5020:5432"
+      - "5500:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
+      - ./db/database.sql:/docker-entrypoint-initdb.d/init.sql
       - ./db/database.sql:/docker-entrypoint-initdb.d/init.sql
     networks:
       - seismic-network

@@ -166,19 +166,6 @@ async def listen():
             else:
                 logger.error("✗ Impossibile connettersi al broker dopo 10 tentativi")
 
-async def export_png():
-    data_url = await chart.run_chart_method('getDataURL', {'type': 'png'})
-
-    downloads = Path.home() / "Downloads"
-    filename = downloads / f"chart_{datetime.now().strftime('%Y%m%d_%H%M%S')}.png"
-
-    img_data = data_url.split(',')[1]
-
-    import base64
-    with open(filename, "wb") as f:
-        f.write(base64.b64decode(img_data))
-
-    ui.notify("PNG salvato in Downloads!")
 
 def open_realtime_measurements():
     all_measurements = live_data
@@ -196,6 +183,23 @@ def open_realtime_measurements():
     def open_chart_dialog():
         with ui.dialog() as chart_dialog:
             with ui.card().classes('w-screen h-screen max-w-full max-h-full p-6 bg-slate-900'):
+
+                 ### to save the chart
+
+                async def export_png():
+                    # Use NiceGUI's built-in method to call ECharts functions directly
+                    url = await chart.run_chart_method(
+                        'getDataURL', {
+                            'type': 'png',
+                            'pixelRatio': 2,
+                            'backgroundColor': '#0f172a'
+                        }
+                    )
+                    
+                    if url:
+                        ui.download(url, filename="sensor_chart.png")
+                    else:
+                        ui.notify("Could not generate image", type='negative')
 
                 # HEADER
                 with ui.row().classes('items-center justify-between w-full mb-6'):

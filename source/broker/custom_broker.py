@@ -136,6 +136,9 @@ class Master:
         self.slave_id = 1   # we'll use this to assign ids to slaves
         self.slaves: list[SlaveConnection] = []
         self.slaves_lock = threading.Lock()
+        self.slaves_state = {}
+        for i in range(1, num_slaves+1):
+            self.slaves_state[i] = 1
 
         self.election_lock = threading.Lock()
 
@@ -248,6 +251,8 @@ class Master:
 
         with self.slaves_lock:
             crushed = [s for s in active_slaves if not s.alive]
+            for s in crushed:
+                self.slaves_state[s.slave_id] = 0
             self.slaves = [s for s in self.slaves if s.alive]   # update slaves
 
         for s in crushed:
@@ -293,6 +298,9 @@ async def get_measures(sensor_id, master: Master):
 
                     # add the sensor id
                     data['sensor_id'] = sensor_id
+                    
+                    # mando a gui le repliche actives
+                    data['active_replicas'] = master.slaves_state
 
                     # send data to the GUI
                     await broadcast_to_ui(data)

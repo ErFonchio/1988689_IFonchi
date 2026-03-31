@@ -105,16 +105,16 @@ async def export_png():
     ui.notify("PNG salvato in Downloads!")
 
 def open_realtime_measurements():
-    all_measurements = fetch_measurements()
+    all_measurements = live_data
     sensor_options = ['All sensors'] + [f'sensor-{i:02d}' for i in range(1, 13)]
 
     def get_realtime_rows():
         rows = live_data
 
-    if realtime_sensor_select.value != 'All sensors':
-        rows = [r for r in rows if r['sensor_id'] == realtime_sensor_select.value]
+        if realtime_sensor_select.value != 'All sensors':
+            rows = [r for r in rows if r['sensor_id'] == realtime_sensor_select.value]
 
-    return rows
+        return rows
 
     chart = None
     #chart_data = []

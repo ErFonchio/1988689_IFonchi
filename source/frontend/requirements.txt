@@ -1,0 +1,4 @@
+nicegui
+websockets
+datetime 
+psycopg2-binary

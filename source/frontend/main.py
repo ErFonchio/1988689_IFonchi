@@ -257,6 +257,20 @@ def open_realtime_measurements():
 
         chart_dialog.open()
 
+    def open_new_screen():
+    with ui.dialog() as new_dialog:
+        with ui.card().classes('w-screen h-screen max-w-full max-h-full p-6'):
+            
+            with ui.row().classes('items-center justify-between w-full mb-4'):
+                ui.label('NEW SCREEN').classes('text-2xl font-bold')
+                ui.space()
+                ui.button(on_click=new_dialog.close)\
+                    .props('icon=close flat round dense')
+
+            ui.label('Qui costruiremo il prossimo step 🚀')
+
+    new_dialog.open()
+
     with ui.dialog() as dialog:
         with ui.card().classes('w-screen h-screen max-w-full max-h-full p-4'):
             with ui.row().classes('items-center justify-between w-full mb-4'):
@@ -266,7 +280,8 @@ def open_realtime_measurements():
             with ui.row().classes('items-center gap-4 mb-4'):
                 realtime_sensor_select = ui.select(sensor_options, label='Filter sensor', value='All sensors').classes('w-56')
                 show_chart_button = ui.button('SHOW CHART', on_click=open_chart_dialog).props('flat no-caps').classes('rounded-lg px-4 py-2 bg-gray-800 text-white')
-
+                open_new_screen_button = ui.button('OPEN NEW SCREEN',on_click=open_new_screen).props('flat no-caps').classes('rounded-lg px-4 py-2 bg-blue-600 text-white')
+            
             realtime_table = ui.table(
                 columns=[
                     {'name': 'sensor_id', 'label': 'Sensor', 'field': 'sensor_id', 'sortable': True},

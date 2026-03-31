@@ -251,10 +251,10 @@ The Frontend connects to the Broker (WebSocket) for real-time data streaming and
     - PNG export for charts
 
   - **Admin Panel** (requires login with admin/admin):
-    - 🔐 Login button visible to all users
-    - 🔓 Logout button visible after authentication
-    - 📊 Show Replicas button (admin only) displays replica health status
-    - Replica status indicator (🟢 Active / 🔴 Inactive)
+    - Login button visible to all users
+    - Logout button visible after authentication
+    - Show Replicas button (admin only) displays replica health status
+    - Replica status indicator (Active / Inactive)
 
   - **Auto-refresh Mechanism**:
     - Event tables update every 5 seconds from database

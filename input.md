@@ -1,6 +1,6 @@
 # System description
 
-
+Fonchi is a distributed real-time seismic signal processing and monitoring system designed to detect and classify seismic events. The system uses a Master-Broker-Slave architecture with frequency analysis to classify events as earthquakes, conventional explosions, nuclear-like events, or base noise. Multiple sensor replicas process signals in parallel, with a centralized broker collecting data and a PostgreSQL database storing analysis results. A real-time NiceGUI frontend displays events, measurements, and replica status through WebSocket streaming.
 
 # User stories
 

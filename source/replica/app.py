@@ -289,7 +289,7 @@ def frequency_analysis(data_window):
             
             results[sensor_id] = {
                 'sensory_id': sensor_id,
-                'event_type': "earthquake" if 0.5 <= dominant_freq < 3.0 else ("conventional-explosion" if 3.0 <= dominant_freq < 8.0 else ("base" if dominant_freq < 0.5 else "nuclear-like")),
+                'event_type': "earthquake" if 0.5 <= dominant_freq < 3.0 else ("conventional_explosion" if 3.0 <= dominant_freq < 8.0 else ("base" if dominant_freq < 0.5 else "nuclear_like")),
                 'interval_start': timestamps[0],
                 'interval_end': timestamps[-1], 
                 'dominant_frequency': dominant_freq,

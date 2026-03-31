@@ -64,8 +64,9 @@ def fetch_events():
         cur = conn.cursor()
 
         cur.execute("""
-            SELECT sensor_id, event_type, startstamp, endstamp, frequency 
+            SELECT sensor_id, event_type, frequency, startstamp, endstamp
             FROM events
+            WHERE event_type IN ('earthquake', 'conventional_explosion', 'nuclear_like')
             ORDER BY startstamp DESC
         """)
 
@@ -242,7 +243,7 @@ def open_realtime_measurements():
 
                         if realtime_sensor_select.value != 'All sensors':
 
-                            last_points = rows[:20][::-1]   
+                            last_points = rows[:500][::-1]   
 
                             x = [r['timestamp'].strftime('%H:%M:%S') for r in last_points]
                             y = [r['sensor_value'] for r in last_points]
@@ -313,8 +314,9 @@ def load_data():
         all_rows.append({
             'sensor': r[0],
             'type': r[1],
-            'timestamp': str(r[2]),
-            'frequency': r[3]
+            'frequency': r[2],
+            'startstamp': str(r[3]),
+            'endstamp': str(r[4]),
         })
     
     logger.info(f"✓ Caricati {len(all_rows)} record in all_rows")
@@ -356,7 +358,8 @@ with ui.card().classes('w-full max-w-6xl mx-auto p-4 shadow-lg'):
                     columns=[
                         {'name': 'sensor', 'label': 'Sensor', 'field': 'sensor', 'sortable': True},
                         {'name': 'frequency', 'label': 'Frequency', 'field': 'frequency', 'sortable': True},
-                        {'name': 'timestamp', 'label': 'Timestamp', 'field': 'timestamp', 'sortable': True}
+                        {'name': 'startstamp', 'label': 'Startstamp', 'field': 'startstamp', 'sortable': True},
+                        {'name': 'endstamp', 'label': 'Endstamp', 'field': 'endstamp', 'sortable': True}
                     ],
                     rows=[],
                 ).classes('w-full cursor-pointer hover:opacity-75 transition-opacity')
@@ -380,7 +383,8 @@ with ui.card().classes('w-full max-w-6xl mx-auto p-4 shadow-lg'):
                                 columns=[
                                     {'name': 'sensor', 'label': 'Sensor', 'field': 'sensor', 'sortable': True},
                                     {'name': 'frequency', 'label': 'Frequency', 'field': 'frequency', 'sortable': True},
-                                    {'name': 'timestamp', 'label': 'Timestamp', 'field': 'timestamp', 'sortable': True}
+                                    {'name': 'startstamp', 'label': 'Startstamp', 'field': 'startstamp', 'sortable': True},
+                                    {'name': 'endstamp', 'label': 'Endstamp', 'field': 'endstamp', 'sortable': True}
                                 ],
                                 rows=event_tables[idx].rows,
                             ).classes('w-full')

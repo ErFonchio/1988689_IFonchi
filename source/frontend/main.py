@@ -19,7 +19,6 @@ BROKER_PORT = int(os.getenv('BROKER_PORT', 5000))
 DB_HOST = os.getenv('DB_HOST', 'postgres')
 DB_PORT = int(os.getenv('DB_PORT', 5432))
 
-
 ui.add_head_html('''
 <style>
 html, body {
@@ -155,7 +154,7 @@ async def listen():
                         
                         if message_count % 50 == 0:
                             logger.info(f"✓ Ricevuti {message_count} messaggi dal broker, live_data size: {len(live_data)}")
-                            logger.info(f"ADMIN FLAG {flag_log_admin}")
+                            #logger.info(f"ADMIN FLAG {flag_log_admin}")
                             #logger.info(f"Ricevute le repliche attive dal broker {data['active_replicas']}")
                         
                     except json.JSONDecodeError as e:
@@ -264,11 +263,14 @@ def open_realtime_measurements():
 
         chart_dialog.open()
 
+
     with ui.dialog() as dialog:
         with ui.card().classes('w-screen h-screen max-w-full max-h-full p-4'):
             with ui.row().classes('items-center justify-between w-full mb-4'):
                 ui.markdown('## REAL TIME Measurements').classes('text-2xl font-bold text-black m-0')
                 ui.space()
+                show_replica_button = ui.button('SHOW REPLICA', on_click=open_replica_dialog).props('flat no-caps').classes('rounded-lg px-4 py-2 bg-gray-800 text-white')
+
                 ui.button(on_click=dialog.close).props('icon=close flat round dense').classes('text-gray-400 hover:text-red-400')
             with ui.row().classes('items-center gap-4 mb-4'):
                 realtime_sensor_select = ui.select(sensor_options, label='Filter sensor', value='All sensors').classes('w-56')
@@ -342,6 +344,7 @@ def load_data():
 
 # ===================== LOGIN FUNCTIONS =====================
 auth_button_container = None  # Riferimento al container del bottone
+replica_button_container = None  # Riferimento al container del bottone repliche
 
 
 def update_auth_button():
@@ -397,11 +400,37 @@ def open_logout_dialog():
     update_auth_button()  # ← Aggiorna il bottone
 
 
+def open_replica_dialog():
+    global flag_log_admin
+    if not flag_log_admin:
+        return
+    """Apre il dialog mostrando lo stato delle repliche"""
+    with ui.dialog() as replica_dialog:
+        with ui.card().classes('w-96 p-6'):
+            ui.label('Replica Status').classes('text-2xl font-bold mb-6')
+            
+            # Itera su tutti gli elementi di active_replicas
+            with ui.column().classes('gap-4'):
+                for replica_id, status in active_replicas.items():
+                    with ui.row().classes('items-center gap-3'):
+                        # Pallino verde se 1, rosso se 0
+                        color = 'bg-green-500' if status == 1 else 'bg-red-500'
+                        ui.element('div').classes(f'w-4 h-4 rounded-full {color}')
+                        ui.label(f'Replica {replica_id}: {"🟢 Active" if status == 1 else "🔴 Inactive"}').classes('text-sm font-semibold')
+            
+            ui.button('Close', on_click=replica_dialog.close).classes('mt-6 w-full bg-gray-600 text-white px-4 py-2 rounded')
+    
+    replica_dialog.open()
+
+
 with ui.card().classes('w-full max-w-6xl mx-auto p-4 shadow-lg'):
     with ui.row().classes('items-center justify-between mb-3 gap-4'):
         ui.markdown('## Recent Events').classes('mb-0')
         with ui.row().classes('items-center gap-2'):
             ui.button('PRESS TO WATCH REAL TIME MEASUREMENTS', on_click=open_realtime_measurements).props('flat no-caps').classes('rounded-lg px-8 py-3 bg-slate-900 text-white text-base font-semibold shadow-md hover:bg-slate-700 hover:shadow-blue-500/30 transition-all duration-300')
+            
+            # Replica button container (solo per admin)
+            # RIMOSSO - bottone repliche solo nel dialog real-time
             
             # Auth button container
             auth_button_container = ui.row().classes('items-center')

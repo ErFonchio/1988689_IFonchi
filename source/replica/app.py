@@ -200,7 +200,7 @@ def save_results_to_db(results):
             try:
                 query = """
                     INSERT INTO events (sensor_id, event_type, startstamp, endstamp, frequency)
-                    VALUES (%s, %s, %s, %s, %s)
+                    VALUES ('sensor-' || %s, %s, %s, %s, %s)
                     ON CONFLICT (sensor_id, startstamp, endstamp) DO NOTHING
                 """
                 

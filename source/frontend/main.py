@@ -39,7 +39,9 @@ event_table_keys = ['earthquake', 'conventional_explosion', 'nuclear_like']
 event_table_titles = ['earthquake', 'conventional explosion', 'nuclear like']
 
 chart=None
-live_data = []   
+live_data = []  
+active_replicas = {'1': 1, '2': 1, '3': 1, '4': 1, '5': 1} 
+flag_log_admin = False
 
 def get_connection():
     try:
@@ -117,6 +119,7 @@ def apply_filters():
 
 async def listen():
     global live_data
+    global active_replicas
     
     max_retries = 10
     retry_count = 0
@@ -146,11 +149,14 @@ async def listen():
                             'timestamp': datetime.fromisoformat(data['timestamp'])
                         }
 
+                        active_replicas = data['active_replicas']
+
                         live_data.insert(0, new_row)
                         
                         if message_count % 50 == 0:
                             logger.info(f"✓ Ricevuti {message_count} messaggi dal broker, live_data size: {len(live_data)}")
-                            logger.info(f"Ricevute le repliche attive dal broker {data['active_replicas']}")
+                            logger.info(f"ADMIN FLAG {flag_log_admin}")
+                            #logger.info(f"Ricevute le repliche attive dal broker {data['active_replicas']}")
                         
                     except json.JSONDecodeError as e:
                         logger.error(f"✗ Errore parsing JSON: {e}")
@@ -334,10 +340,72 @@ def load_data():
     apply_filters()
 
 
+# ===================== LOGIN FUNCTIONS =====================
+auth_button_container = None  # Riferimento al container del bottone
+
+
+def update_auth_button():
+    """Aggiorna il bottone di auth"""
+    global auth_button_container
+    if auth_button_container is None:
+        return
+    
+    auth_button_container.clear()
+    with auth_button_container:
+        if flag_log_admin:
+            ui.button('🔓 Logout', on_click=open_logout_dialog).props('flat').classes('px-4 py-2 bg-red-600 text-white rounded text-sm hover:bg-red-700')
+        else:
+            ui.button('🔐 Login', on_click=open_login_dialog).props('flat').classes('px-4 py-2 bg-blue-600 text-white rounded text-sm hover:bg-blue-700')
+
+
+def open_login_dialog():
+    """Apre il dialog di login"""
+    global flag_log_admin
+    
+    with ui.dialog() as login_dialog:
+        with ui.card().classes('w-96 p-6'):
+            ui.label('Admin Login').classes('text-2xl font-bold mb-6')
+            
+            username_input = ui.input('Username').classes('w-full mb-4')
+            password_input = ui.input('Password').props('type=password').classes('w-full mb-6')
+            error_label = ui.label('').classes('text-red-500 text-sm mb-4')
+            
+            def handle_login():
+                global flag_log_admin
+                if (username_input.value == 'admin') and (password_input.value == 'admin'):
+                    flag_log_admin = True
+                    logger.info("✓ Admin login successful")
+                    login_dialog.close()
+                    update_auth_button()  # ← Aggiorna il bottone
+                else:
+                    error_label.text = "❌ Invalid credentials"
+                    logger.warning("✗ Login failed")
+            
+            with ui.row().classes('gap-2'):
+                ui.button('Login', on_click=handle_login).classes('flex-1 bg-blue-600 text-white')
+                ui.button('Cancel', on_click=login_dialog.close).classes('flex-1 bg-gray-400 text-white')
+    
+    login_dialog.open()
+
+
+def open_logout_dialog():
+    """Effettua il logout"""
+    global flag_log_admin
+    
+    flag_log_admin = False
+    logger.info("✓ Logout successful")
+    update_auth_button()  # ← Aggiorna il bottone
+
+
 with ui.card().classes('w-full max-w-6xl mx-auto p-4 shadow-lg'):
-    with ui.row().classes('items-center mb-3 gap-4'):
+    with ui.row().classes('items-center justify-between mb-3 gap-4'):
         ui.markdown('## Recent Events').classes('mb-0')
-        ui.button('PRESS TO WATCH REAL TIME MEASUREMENTS', on_click=open_realtime_measurements).props('flat no-caps').classes('rounded-3xl px-30 py-10 bg-slate-900 text-white text-xl font-semibold shadow-xl hover:bg-slate-700 hover:shadow-blue-500/30 transition-all duration-300 ml-35')
+        with ui.row().classes('items-center gap-2'):
+            ui.button('PRESS TO WATCH REAL TIME MEASUREMENTS', on_click=open_realtime_measurements).props('flat no-caps').classes('rounded-lg px-8 py-3 bg-slate-900 text-white text-base font-semibold shadow-md hover:bg-slate-700 hover:shadow-blue-500/30 transition-all duration-300')
+            
+            # Auth button container
+            auth_button_container = ui.row().classes('items-center')
+            update_auth_button()
 
     sensor_options = ['All sensors'] + [f'sensor-{i:02d}' for i in range(1, 13)]
     with ui.row().classes('items-center gap-3 flex-wrap mb-4'):

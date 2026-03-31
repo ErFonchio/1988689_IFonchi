@@ -300,7 +300,7 @@ async def get_measures(sensor_id, master: Master):
                     data['sensor_id'] = sensor_id
                     
                     # mando a gui le repliche actives
-                    data['active_replicas'] = master.slaves_state
+                    data['active_replicas'] = master.slaves_state # Es: {'1': 0, '2': 1, '3': 1, '4':1, '5': 1}
 
                     # send data to the GUI
                     await broadcast_to_ui(data)

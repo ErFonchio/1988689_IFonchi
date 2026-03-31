@@ -40,6 +40,7 @@ event_table_titles = ['earthquake', 'conventional explosion', 'nuclear like']
 
 chart=None
 live_data = []   
+active_replicas_state = {}
 
 def get_connection():
     try:
@@ -116,7 +117,7 @@ def apply_filters():
 
 
 async def listen():
-    global live_data
+    global live_data, active_replicas_state
     
     max_retries = 10
     retry_count = 0
@@ -132,6 +133,10 @@ async def listen():
                     try:
                         data = json.loads(message)
                         message_count += 1
+
+                        incoming = data.get('active_replicas')
+                        if incoming:
+                            active_replicas_state = {int(k): v for k, v in incoming.items()}
                         
                         # Verifica campi obbligatori
                         required_fields = ['sensor_id', 'value', 'timestamp']
@@ -258,18 +263,43 @@ def open_realtime_measurements():
         chart_dialog.open()
 
     def open_new_screen():
-    with ui.dialog() as new_dialog:
-        with ui.card().classes('w-screen h-screen max-w-full max-h-full p-6'):
-            
-            with ui.row().classes('items-center justify-between w-full mb-4'):
-                ui.label('NEW SCREEN').classes('text-2xl font-bold')
-                ui.space()
-                ui.button(on_click=new_dialog.close)\
-                    .props('icon=close flat round dense')
+        with ui.dialog() as new_dialog:
+            with ui.card().classes('w-screen h-screen max-w-full max-h-full p-6'):
 
-            ui.label('Qui costruiremo il prossimo step 🚀')
+                with ui.row().classes('items-center justify-between w-full mb-6'):
+                    ui.label('Replica Status').classes('text-2xl font-bold')
+                    ui.space()
+                    ui.button(on_click=new_dialog.close)\
+                        .props('icon=close flat round dense')
 
-    new_dialog.open()
+                # 👇 GRID replica
+                with ui.row().classes('gap-8 justify-center'):
+
+                    replica_labels = []
+                    replica_status = []
+
+                    for i in range(1, 6):
+                        with ui.column().classes('items-center'):
+                            label = ui.label(f'replica-{i:02d}')
+                            dot = ui.label('●').classes('text-3xl')
+
+                            replica_labels.append(label)
+                            replica_status.append((i, dot))
+
+                # 🔁 aggiornamento realtime
+                def update_replicas():
+                    for i, dot in replica_status:
+                        logger.info("DEBUG:", active_replicas_state)
+                        status = active_replicas_state.get(str(i), 0)
+
+                        if status == 1:
+                            dot.classes(add='text-green-500')
+                        else:
+                            dot.classes(add='text-red-500')
+
+                ui.timer(1.0, update_replicas)
+
+        new_dialog.open()
 
     with ui.dialog() as dialog:
         with ui.card().classes('w-screen h-screen max-w-full max-h-full p-4'):

@@ -291,8 +291,6 @@ async def get_measures(sensor_id, master: Master):
                     # 1. Ricevi la misurazione dal simulatore (JSON)
                     measurement = await websocket.recv()
 
-                    #print(f"MEASUREMENT: {measurement}\n")
-
                     # transform the json file in a python dictiorary
                     data = json.loads(measurement)
 
@@ -330,8 +328,7 @@ async def start():
     logger.info("Thread accept_connection avviato")
     
     # Avvia i thread di lettura dei sensori
-    #run(master)
-
+    
     await asyncio.gather(
         start_ui_server(),
         *[get_measures(sid, master) for sid in ws_urls.keys()]

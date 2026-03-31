@@ -6,16 +6,27 @@ Fonchi is a distributed real-time seismic signal processing and monitoring syste
 
 ## USER STORIES:
 
-1) As a Monitor Operator, I want to see real-time seismic events so that I can track seismic activity
-2) As a Monitor Operator, I want to filter events by sensor so that I can analyze specific sensor data
-3) As a Monitor Operator, I want to view historical events from the database so that I can analyze past seismic trends
-4) As a Monitor Operator, I want to see real-time measurements with live charts so that I can visualize sensor data
-5) As an Admin, I want to log in to access administrative features so that I can manage system status
-6) As an Admin, I want to view active replicas so that I can monitor system health
-7) As an Admin, I want to download charts as PNG so that I can preserve analysis results
-8) As a System Architect, I want seismic events classified by frequency so that I can differentiate event types
-9) As a System Architect, I want signal processing in parallel across multiple replicas so that I can ensure system reliability
-10) As a System Architect, I want persistent storage of analyzed events so that I can maintain historical records
+1.  As a Client I want to see the events on a dasboard
+2.  As a Client, I want to know wich are the main events
+3.  As a Client, for each event, I want to see a dedicated widget
+4.  As a Client, in each event widget, I want to see, the sensor, frequency, startstamp, endstamp
+5.  As a Client, I want to be able to refresh the event widget 
+6.  As a Client, I want to be able to inspect the single event widget.
+7.  As a Client, I want to inspect the historical events
+8.  As a Client, I want to see in real time the data transmitted by the sensors
+9.  As a Client, I want to see a sliding window of the plotted data.
+10. As a Client, I want to be able to filter the real time data based on the sensor
+11. As a Client, I want be able to plot the sensor's transmitted data 
+12. As a Client, I want to see the evolution of the plot in time
+13. As a Client, I want to be able to hover on the points of the plot and inspect the single value.
+14. As a Client, I want to be able to export the plot in png format
+15. As a Client, I want to inspect the historical events on the dashboard
+16. As a Client, I want to be notified when the site goes down
+17. As an Admin, I want to be able to login
+18. As an Admin, I want to be able to logout
+19. As an Admin, I want to be able to see the number of replicas
+20. As an Admin, I want to see which replicas are alive or not
+
 
 ## CONTAINERS:
 
@@ -25,10 +36,10 @@ Fonchi is a distributed real-time seismic signal processing and monitoring syste
 Manages WebSocket connections, coordinates Master-Broker-Slave communication, handles real-time data streaming, and maintains socket-based synchronization with replicas.
 
 ### USER STORIES:
-1) As a Monitor Operator, I want to see real-time seismic events so that I can track seismic activity
-2) As a Monitor Operator, I want to filter events by sensor so that I can analyze specific sensor data
-4) As a Monitor Operator, I want to see real-time measurements with live charts so that I can visualize sensor data
-9) As a System Architect, I want signal processing in parallel across multiple replicas so that I can ensure system reliability
+8.  As a Client, I want to see in real time the data transmitted by the sensors
+10. As a Client, I want to be able to filter the real time data based on the sensor
+13. As a Client, I want to be able to hover on the points of the plot and inspect the single value
+16. As a Client, I want to be notified when the site goes down
 
 ### PORTS:
 5000 (WebSocket), 5001 (TCP Socket)
@@ -49,6 +60,7 @@ The Broker connects to the PostgreSQL database for event storage and to multiple
 - DESCRIPTION: Manages WebSocket connections with the frontend, coordinates Master-Broker-Slave architecture with replica coordination via TCP sockets, implements ACK protocol and leader election, forwards real-time measurements to frontend clients.
 - PORTS: 5000 (WebSocket), 5001 (TCP)
 - TECHNOLOGICAL SPECIFICATION:
+
   - Python 3.11
   - asyncio for asynchronous event handling
   - websockets library for WebSocket server
@@ -63,14 +75,6 @@ The Broker connects to the PostgreSQL database for event storage and to multiple
   - Master-Broker state machine managing replica states
   - Real-time data relay forwarding sensor measurements to frontend
   - Event aggregation from multiple replicas
-
-- KEY FEATURES:
-  - Real-time WebSocket streaming at ~50 messages per log cycle
-  - Replica health monitoring with active_replicas state tracking
-  - ACK-based reliability protocol for replica coordination
-  - Automatic leader election among replicas
-  - Broadcast of sensor data to all connected frontend clients
-
 ---
 
 ## CONTAINER_NAME: Replica
@@ -79,16 +83,17 @@ The Broker connects to the PostgreSQL database for event storage and to multiple
 Processes seismic signals using FFT frequency analysis, classifies events, communicates with broker via TCP socket, and stores results in PostgreSQL database.
 
 ### USER STORIES:
-1) As a Monitor Operator, I want to see real-time seismic events so that I can track seismic activity
-8) As a System Architect, I want seismic events classified by frequency so that I can differentiate event types
-9) As a System Architect, I want signal processing in parallel across multiple replicas so that I can ensure system reliability
-10) As a System Architect, I want persistent storage of analyzed events so that I can maintain historical records
+8.  As a Client, I want to see in real time the data transmitted by the sensors
+11. As a Client, I want be able to plot the sensor's transmitted data 
+19. As an Admin, I want to be able to see the number of replicas
+20. As an Admin, I want to see which replicas are alive or not
 
 ### PORTS:
 Multiple instances (5 replicas total)
 
 ### DESCRIPTION:
 Each Replica container is responsible for processing raw seismic signals from 12 sensor channels using FFT frequency analysis. It classifies detected events based on dominant frequency bands into event categories (earthquake, conventional_explosion, nuclear_like, base). Communication with the broker is handled via TCP socket with ACK protocol. All analyzed events are stored in the PostgreSQL database with timestamp and frequency information.
+
 
 ### PERSISTENCE EVALUATION:
 Replica containers require access to the PostgreSQL database to persist event analysis results (sensor_id, event_type, startstamp, endstamp, frequency).
@@ -123,18 +128,6 @@ Each Replica connects to the Broker (TCP socket) for coordination and to Postgre
   - Conventional Explosion: 3.0-8.0 Hz
   - Nuclear-like: > 8.0 Hz
 
-- KEY FEATURES:
-  - 12 sensor channels processed in parallel
-  - Real-time FFT analysis with frequency classification
-  - Event storage: sensor_id, event_type, startstamp, endstamp, frequency
-  - TCP communication with heartbeat and ACK validation
-  - Replica state reporting to broker
-
-- ENDPOINTS (via TCP Socket):
-  - Send classified event to broker (event_type, sensor_id, frequency, timestamps)
-  - Receive ACK confirmation from broker
-  - Report replica status to broker for health monitoring
-
 ---
 
 ## CONTAINER_NAME: Database
@@ -143,8 +136,9 @@ Each Replica connects to the Broker (TCP socket) for coordination and to Postgre
 Persistent storage for all analyzed seismic events, providing historical data for analysis and reporting.
 
 ### USER STORIES:
-3) As a Monitor Operator, I want to view historical events from the database so that I can analyze past seismic trends
-10) As a System Architect, I want persistent storage of analyzed events so that I can maintain historical records
+1.  As a Client I want to see the events on a dasboard
+5.  As a Client, I want to be able to refresh the event widget
+7. As a Client, I want to inspect the historical events
 
 ### PORTS:
 5432 (PostgreSQL)
@@ -191,13 +185,21 @@ The Database connects to Replica instances for event storage and to the Frontend
 Real-time dashboard for monitoring seismic events, viewing measurements, filtering by sensor, and accessing administrative features.
 
 ### USER STORIES:
-1) As a Monitor Operator, I want to see real-time seismic events so that I can track seismic activity
-2) As a Monitor Operator, I want to filter events by sensor so that I can analyze specific sensor data
-3) As a Monitor Operator, I want to view historical events from the database so that I can analyze past seismic trends
-4) As a Monitor Operator, I want to see real-time measurements with live charts so that I can visualize sensor data
-5) As an Admin, I want to log in to access administrative features so that I can manage system status
-6) As an Admin, I want to view active replicas so that I can monitor system health
-7) As an Admin, I want to download charts as PNG so that I can preserve analysis results
+1.  As a Client I want to see the events on a dasboard
+2.  As a Client, I want to know wich are the main events
+3.  As a Client, for each event, I want to see a dedicated widget
+4.  As a Client, in each event widget, I want to see, the sensor, frequency, startstamp, endstamp 
+6.  As a Client, I want to be able to inspect the single event widget.
+9.  As a Client, I want to see a sliding window of the plotted data.
+10. As a Client, I want to be able to filter the real time data based on the sensor
+11. As a Client, I want be able to plot the sensor's transmitted data 
+12. As a Client, I want to see the evolution of the plot in time
+13. As a Client, I want to be able to hover on the points of the plot and inspect the single value.
+14. As a Client, I want to be able to export the plot in png format
+15. As a Client, I want to inspect the historical events on the dashboard
+17. As an Admin, I want to be able to login
+18. As an Admin, I want to be able to logout
+19. As an Admin, I want to be able to see the number of replicas
 
 ### PORTS:
 5030 (NiceGUI)
@@ -294,32 +296,3 @@ The Simulator container generates realistic synthetic seismic signals across 12 
   - Realistic noise patterns and frequency distributions
   - Event simulation with controlled frequency bands
 
----
-
-## SYSTEM ARCHITECTURE OVERVIEW:
-
-### Data Flow:
-1. **Simulator** generates synthetic seismic signals on 12 sensor channels
-2. **Replicas** receive signals, perform FFT analysis, classify events
-3. **Broker** aggregates results from replicas via TCP socket protocol
-4. **Database** persists classified events for historical access
-5. **Frontend** queries database for event display and streams real-time measurements via WebSocket
-
-### Communication Protocols:
-- **Broker ↔ Replicas**: TCP socket with ACK protocol and leader election
-- **Broker ↔ Frontend**: WebSocket for real-time measurement streaming
-- **Frontend ↔ Database**: Direct PostgreSQL queries
-- **Replicas ↔ Database**: Direct event insertion
-
-### Scalability:
-- 5 parallel replicas for distributed signal processing
-- Master-Broker-Slave architecture with automatic leader election
-- Up to 500 real-time data points maintained in frontend buffer
-- Indexed database queries with composite keys for fast retrieval
-
-### Performance:
-- ~50 messages per log cycle from broker
-- 14450+ real-time messages flowing per session
-- 1400+ events stored and queryable from database
-- 200-point chart display with smart decimation for browser performance
-- 5-second auto-refresh interval for event tables

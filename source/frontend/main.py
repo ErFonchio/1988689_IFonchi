@@ -19,7 +19,6 @@ BROKER_PORT = int(os.getenv('BROKER_PORT', 5000))
 DB_HOST = os.getenv('DB_HOST', 'postgres')
 DB_PORT = int(os.getenv('DB_PORT', 5432))
 
-
 ui.add_head_html('''
 <style>
 html, body {

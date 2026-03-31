@@ -311,26 +311,6 @@ async def get_measures(sensor_id, master: Master):
         logger.error(f"Errore WebSocket per sensore {sensor_id}: {e}")
 
 
-#def start_reading(sensor_id, master):
-#    """Avvia un thread asincrono per leggere da un sensore"""
-#    asyncio.run(get_measures(sensor_id, master))
-#
-#
-#def run(master):
-#    '''
-#        Start threads that concurrently read measures from sensors.
-#        Mantiene il programma in vita
-#    '''
-#    with ThreadPoolExecutor(max_workers=len(ws_urls) if ws_urls else 1) as executor:
-#        sensors = ws_urls.keys()
-#        for sensor_id in sensors:
-#            executor.submit(start_reading, sensor_id, master)
-#        
-#        # Mantieni il programma in vita
-#        logger.info("Thread di lettura sensori avviati, in attesa...")
-#        while True:
-#            time.sleep(1)  # Mantiene vivo il ThreadPoolExecutor
-
 
 async def start():
     logger.info("Avvio Broker Master-Slave...")
